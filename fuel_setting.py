@@ -425,7 +425,7 @@ def getDailyReport(country, custId, unicode, start_time, end_time, method="get")
             # "endTimeExtended": "2025-02-11T16:00:00Z"
         },
     ).json()
-    #pprint(data) 
+   #pprint(data) 
     return data
 
 
@@ -1320,7 +1320,7 @@ if __name__ == "__main__":
     # saveTbFuelRecord("vn", data_tb_fuel_records)
     # syncRedis("vn", "30055562")
     # showCustomerOptions()
-    # getDailyReport("my", 1127, "40009915", "2024-11-10T16:00:00Z", "2024-11-12T15:59:59Z", 'set')
+    getDailyReport("my", 1127, "40009915", "2025-05-03T16:00:00Z", "2025-05-05T15:59:59Z", 'get')
     # getDailyReport("my", 1379, "40009602", "2024-12-02T16:00:00Z", "2024-12-04T15:59:59Z", 'set')
     # syncFuelData("vn", "30055562", "2024-12-24T17:00:00Z", "2024-12-25T16:59:59Z")
     # getDailyReportAllCustomer("vn", 7220, "2024-12-12T17:00:00Z", "2024-12-13T16:59:59Z", 'set') # imid=14131
@@ -1433,7 +1433,7 @@ if __name__ == "__main__":
     # getDailyReport("my", "578", "40003465", "2025-02-10T16:00:00Z", "2025-02-13T15:59:59Z", "set")
     data = callFuelDataHub("th-stage2", "3715", "50006065", "2025-01-05T00:00:00Z", "2025-04-25T23:59:59Z", "MY09-9O-VN9R-FS04")
 
-    print(getDailyReport("my-stage2", "517", "40003070", "2025-05-05T17:00:00Z", "2025-06-05T16:59:59Z", "get"))
+   #print(getDailyReport("my-stage2", "517", "40003070", "2025-05-05T17:00:00Z", "2025-06-05T16:59:59Z", "get"))
     # data = callFuelDataHub("local", "8867", "30018551", "2025-02-19T00:00:00Z", "2025-02-20T23:59:59Z", "MY09-9O-VN9R")
     # data = callFuelDataHub("local", "8867", "30018551", "2025-02-19T00:00:00Z", "2025-02-20T23:59:59Z", "MY09-9O-VN9R-FS04")
     # print(data['refillEventList'])

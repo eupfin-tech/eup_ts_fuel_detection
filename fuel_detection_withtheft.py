@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from scipy import stats
 from crm_model import fetch_fuel_calibration
-from adc.get_fuel_sensor_raw_data import fetch_fuel_data
+import requests
 
 class FuelEventDetector:
     """油量事件偵測器 - 自適應版本"""
@@ -19,7 +19,7 @@ class FuelEventDetector:
         fuel_data: 車輛油量數據CSV檔案路徑或 DataFrame
         """
         import pandas as pd
-
+ 
         # 處理 model
         if isinstance(model, str):
             # 路徑，讀CSV
@@ -437,168 +437,7 @@ class FuelEventDetector:
         
         return merged_events
     
-    def plot_fuel_history(self, events_df=None, save_path=None):
-        """繪製油量歷史圖表"""
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10), sharex=True)
-        
-        # 繪製原始電壓數據
-        ax1.plot(self.fuel_df['time'], self.fuel_df['instant_fuel'], 
-                 'b-', alpha=0.3, label='Raw Voltage')
-        ax1.plot(self.fuel_df['time'], self.fuel_df['smooth_voltage'], 
-                 'b-', linewidth=2, label='Smoothed Voltage')
-        ax1.set_ylabel('Voltage (0-4095)')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        ax1.set_title('Vehicle Fuel Voltage History')
-        
-        # 繪製轉換後的油量
-        ax2.plot(self.fuel_df['time'], self.fuel_df['fuel_liters'], 
-                 'g-', alpha=0.3, label='Calculated Fuel')
-        ax2.plot(self.fuel_df['time'], self.fuel_df['smooth_fuel'], 
-                 'g-', linewidth=2, label='Smoothed Fuel')
-        
-        # 標記加油事件
-        if events_df is not None and len(events_df) > 0:
-            # 只顯示加油事件
-            refuel_events = events_df[events_df['event_type'] == 'refuel']
-            for idx, event in refuel_events.iterrows():
-                ax2.axvspan(event['start_time'], event['end_time'], 
-                           alpha=0.3, color='yellow', label='Refueling' if idx == refuel_events.index[0] else '')
-                ax2.text(event['start_time'], 
-                        event['fuel_after'], 
-                        f"+{event['fuel_added']:.1f}L",
-                        rotation=90, verticalalignment='bottom',
-                        color='red', fontsize=10, fontweight='bold')
-        
-        ax2.set_xlabel('Time')
-        ax2.set_ylabel('Fuel (Liters)')
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
-        ax2.set_title('Vehicle Fuel History with Refuel Events')
-        
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        
-        plt.show()
     
-    def plot_fuel_change_with_events(self, events_df=None, save_path=None):
-        """繪製油量變化線圖，標示加油和偷油事件"""
-        plt.figure(figsize=(16, 8))
-        
-        # 繪製油量變化線
-        plt.plot(self.fuel_df['time'], self.fuel_df['fuel_liters'], 
-                'lightblue', alpha=0.5, linewidth=1, label='Raw Fuel Level')
-        plt.plot(self.fuel_df['time'], self.fuel_df['smooth_fuel'], 
-                'darkblue', linewidth=2, label='Smoothed Fuel Level')
-        
-        # 標記事件
-        if events_df is not None and len(events_df) > 0:
-            refuel_events = events_df[events_df['event_type'] == 'refuel']
-            theft_events = events_df[events_df['event_type'] == 'theft']
-            
-            # 標記加油事件
-            for idx, event in refuel_events.iterrows():
-                plt.axvspan(event['start_time'], event['end_time'], 
-                           alpha=0.2, color='yellow')
-                
-                plt.scatter(event['start_time'], event['fuel_before'], 
-                           color='red', s=100, zorder=5, marker='o', 
-                           edgecolor='darkred', linewidth=2)
-                
-                plt.scatter(event['end_time'], event['fuel_after'], 
-                           color='green', s=100, zorder=5, marker='s', 
-                           edgecolor='darkgreen', linewidth=2)
-                
-                plt.plot([event['start_time'], event['end_time']], 
-                        [event['fuel_before'], event['fuel_after']], 
-                        'r--', linewidth=2, alpha=0.7)
-                
-                mid_time = event['start_time'] + (event['end_time'] - event['start_time']) / 2
-                mid_fuel = (event['fuel_before'] + event['fuel_after']) / 2
-                
-                plt.annotate(f'Refuel\n+{event["fuel_added"]:.1f}L\n{event["duration_minutes"]:.1f} min', 
-                            xy=(mid_time, mid_fuel),
-                            xytext=(10, 20), textcoords='offset points',
-                            bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.8),
-                            arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
-                            fontsize=10, fontweight='bold')
-            
-            # 標記偷油事件
-            for idx, event in theft_events.iterrows():
-                plt.axvspan(event['start_time'], event['end_time'], 
-                           alpha=0.2, color='red')
-                
-                plt.scatter(event['start_time'], event['fuel_before'], 
-                           color='orange', s=100, zorder=5, marker='v', 
-                           edgecolor='darkred', linewidth=2)
-                
-                plt.scatter(event['end_time'], event['fuel_after'], 
-                           color='darkred', s=100, zorder=5, marker='^', 
-                           edgecolor='black', linewidth=2)
-                
-                plt.plot([event['start_time'], event['end_time']], 
-                        [event['fuel_before'], event['fuel_after']], 
-                        'r:', linewidth=2, alpha=0.7)
-                
-                mid_time = event['start_time'] + (event['end_time'] - event['start_time']) / 2
-                mid_fuel = (event['fuel_before'] + event['fuel_after']) / 2
-                
-                plt.annotate(f'Theft\n-{event["fuel_loss"]:.1f}L\n{event["duration_minutes"]:.1f} min', 
-                            xy=(mid_time, mid_fuel),
-                            xytext=(10, -30), textcoords='offset points',
-                            bbox=dict(boxstyle='round,pad=0.5', fc='red', alpha=0.8),
-                            arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
-                            fontsize=10, fontweight='bold', color='white')
-            
-            # 添加圖例說明
-            if len(refuel_events) > 0:
-                plt.scatter([], [], color='red', s=100, marker='o', 
-                           edgecolor='darkred', linewidth=2, label='Refuel Start')
-                plt.scatter([], [], color='green', s=100, marker='s', 
-                           edgecolor='darkgreen', linewidth=2, label='Refuel End')
-            
-            if len(theft_events) > 0:
-                plt.scatter([], [], color='orange', s=100, marker='v', 
-                           edgecolor='darkred', linewidth=2, label='Theft Start')
-                plt.scatter([], [], color='darkred', s=100, marker='^', 
-                           edgecolor='black', linewidth=2, label='Theft End')
-        
-        plt.xlabel('Time', fontsize=12)
-        plt.ylabel('Fuel (Liters)', fontsize=12)
-        plt.title('Vehicle Fuel Level Changes with Refueling and Theft Events', fontsize=16, fontweight='bold')
-        plt.legend(loc='best', fontsize=10)
-        plt.grid(True, alpha=0.3)
-        
-        # 設置x軸日期格式
-        plt.gcf().autofmt_xdate()
-        
-        # 添加統計資訊
-        if events_df is not None and len(events_df) > 0:
-            refuel_events = events_df[events_df['event_type'] == 'refuel']
-            theft_events = events_df[events_df['event_type'] == 'theft']
-            
-            stats_text = f'Refuel Events: {len(refuel_events)}\n'
-            if len(refuel_events) > 0:
-                stats_text += f'Total Fuel Added: {refuel_events["fuel_added"].sum():.1f}L\n'
-            
-            stats_text += f'Theft Events: {len(theft_events)}\n'
-            if len(theft_events) > 0:
-                stats_text += f'Total Fuel Lost: {theft_events["fuel_loss"].sum():.1f}L'
-            
-            plt.text(0.02, 0.98, stats_text,
-                    transform=plt.gca().transAxes,
-                    bbox=dict(boxstyle='round,pad=0.5', fc='white', alpha=0.8),
-                    verticalalignment='top',
-                    fontsize=10)
-        
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        
-        plt.show()
     
     def generate_report(self, events_df):
         """生成油量事件報告"""
@@ -662,135 +501,271 @@ class FuelEventDetector:
         else:
             print("No fuel events detected.")
 
-def load_vehicles_from_csv(csv_path):
-    import pandas as pd
-    from datetime import datetime
-    df = pd.read_csv(csv_path)
-    vehicles = []
-    for _, row in df.iterrows():
-        vehicles.append({
-            "car_id": str(row["unicode"]),
-            "country": "MY",  # 可根據實際需求調整
-            "fuel_sensor_type": "stick",  # 可根據實際需求調整
-            "start_time": datetime(2024, 3, 1, tzinfo=timezone.utc),  # 使用 UTC+0
-            "end_time": datetime(2024, 3, 31, tzinfo=timezone.utc)    # 使用 UTC+0
-        })
-    return vehicles
+class CatchISData:
+    def __init__(self, country):
+        self.country = country
+        self.token = self.get_token(country)
+    
+    def get_token(self, country):
+        if country == "my":
+            url = "https://my-slt.eupfin.com/Eup_IS_SOAP/login"
+            payload = {"account":"eupsw","password":"EupFin@SW"}
+        elif country == "th":
+            url = "https://th-slt.eupfin.com/Eup_IS_SOAP/login"
+            payload = {"account":"eupsw","password":"EupFin@SW"}
+        elif country == "vn":
+            url = "https://slt.ctms.vn:8446/Eup_IS_SOAP/login"
+            payload = {"account":"eupsw","password":"EupFin@SW"}
+        else:
+            raise ValueError("Invalid country")
+        response = requests.post(url, json=payload)
+        return response.json()['result']['token']
 
-def process_vehicles(vehicles=None, csv_path=None, start_time=None, end_time=None, limit=None, prefer_status=None):
+    def get_fuel_data(self, car_unicode, start_time, end_time):
+        country = self.country
+        token = self.token
+        if country == "my":
+            url = "https://my-slt.eupfin.com/Eup_IS_SOAP/log"
+            UserID = 55
+            UserType = 1
+        elif country == "th":
+            url = "https://th-slt.eupfin.com/Eup_IS_SOAP/log"
+            UserID = 56
+            UserType = 1
+        elif country == "vn":
+            url = "https://slt.ctms.vn:8446/Eup_IS_SOAP/log"
+            UserID = 9083
+            UserType = 1
+        else:
+            raise ValueError("Invalid country")
+        
+        headers = {
+            "Authorization": token,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "carUnicode": car_unicode,
+            "type": "19",
+            "startTime": start_time,
+            "endTime": end_time,
+            "userID": UserID,
+            "userType": UserType
+        }
+        response = requests.post(url, json=payload, headers=headers)
+        return response.json()
+
+    def fetch_fuel_data(self, fuel_sensor_type, unicode, start_time, end_time):
+        if fuel_sensor_type == "stick":
+            selected_fields = ['dtime', 'instant_fuel', 'speed', 'gisx', 'gisy', 'unicode', 'status']
+        elif fuel_sensor_type == "adc":
+            selected_fields = ['dtime', 'fuel_gauge', 'speed', 'gisx', 'gisy', 'unicode', 'status']
+        else:
+            raise ValueError("Invalid fuel sensor type")
+        result_data = []
+
+        total_days = (end_time - start_time).days + 1
+        if total_days > 7:
+            for i in range(0, total_days, 7):
+                seg_start = start_time + timedelta(days=i)
+                seg_end = min(seg_start + timedelta(days=6), end_time)
+                st = seg_start.strftime('%Y-%m-%d %H:%M:%S')
+                et = seg_end.strftime('%Y-%m-%d %H:%M:%S')
+                fuel_data = self.get_fuel_data(unicode, st, et)
+                for record in fuel_data['result']:
+                    selected_data = {field: record[field] for field in selected_fields}
+                    result_data.append(selected_data)
+        else:
+            st = start_time.strftime('%Y-%m-%d %H:%M:%S')
+            et = end_time.strftime('%Y-%m-%d %H:%M:%S')
+            fuel_data = self.get_fuel_data(unicode, st, et)
+            for record in fuel_data['result']:
+                selected_data = {field: record[field] for field in selected_fields}
+                result_data.append(selected_data)
+
+        df = pd.DataFrame(result_data)
+        # 欄位標準化
+        if fuel_sensor_type == "stick":
+            df = df.rename(columns={'dtime': 'time'})
+        elif fuel_sensor_type == "adc":
+            df = df.rename(columns={'dtime': 'time', 'fuel_gauge': 'instant_fuel'})
+        return df
+
+def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st=None, et=None, limit=None):
+    """
+    偵測指定時間範圍內的加油事件
+    
+    Parameters:
+    -----------
+    vehicles: list of dict，每個 dict 至少要有 car_id, country
+    csv_path: str，CSV檔案路徑，包含車輛資訊
+    st, et: 查詢事件的日期範圍（datetime 或 'YYYY-MM-DD' 字串）
+    limit: int，處理的車輛數量限制，None表示不限制
+    
+    Returns:
+    --------
+    DataFrame: 所有車在指定日期範圍內的加油事件
+    """
+    # 檢查必要參數
+    if not st or not et:
+        raise ValueError("必須提供開始時間(st)和結束時間(et)")
+    
+    # 轉換日期格式
+    if isinstance(st, str):
+        st = datetime.strptime(st, "%Y-%m-%d")
+    if isinstance(et, str):
+        et = datetime.strptime(et, "%Y-%m-%d")
+
+    # 處理車輛列表
     if csv_path:
-        vehicles = load_vehicles_from_csv(csv_path)
+        # 從CSV讀取車輛列表
+        vehicles_df = pd.read_csv(csv_path)
+        vehicles = []
+        for _, row in vehicles_df.iterrows():
+            vehicles.append({
+                "unicode": str(row["unicode"]),
+                "cust_id": str(row["cust_id"]),     
+            })
+    elif not vehicles:
+        raise ValueError("必須提供vehicles或csv_path其中一個參數")
+
+    # 套用車輛數量限制
     if limit:
         vehicles = vehicles[:limit]
-    if prefer_status:
-        vehicles = [v for v in vehicles if v.get('status', '') == prefer_status]
+        print(f"限制處理 {limit} 台車輛")
 
-    all_events = []
+    # 計算前30天的時間範圍（不包含st當天）
+    calibration_start = st - timedelta(days=40)
+    calibration_end = st - timedelta(days=1)  # 到st的前一天
+    print("calibration_start:", calibration_start)
+    print("calibration_end:", calibration_end)
+    
+    all_results = []
     for v in vehicles:
-        if start_time: 
-            # 確保時間是 UTC+0
-            if not isinstance(start_time, datetime):
-                start_time = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
-            if start_time.tzinfo is None:
-                start_time = start_time.replace(tzinfo=timezone.utc)
-            v['start_time'] = start_time
-            
-        if end_time: 
-            # 確保時間是 UTC+0
-            if not isinstance(end_time, datetime):
-                end_time = datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%SZ")
-            if end_time.tzinfo is None:
-                end_time = end_time.replace(tzinfo=timezone.utc)
-            v['end_time'] = end_time
-
-        print(f"\n==== 處理車機碼 {v['car_id']} ====")
-        fuel_df = fetch_fuel_data(
-            country=v["country"],
-            fuel_sensor_type=v["fuel_sensor_type"],
-            unicode=v["car_id"],
-            start_time=v["start_time"],
-            end_time=v["end_time"]
-        )
-        print("fuel_df.columns:", fuel_df.columns)
-        print("fuel_df.shape:", fuel_df.shape)
-        if fuel_df.empty or fuel_df.shape[1] == 0:
-            print(f"警告：{v['car_id']} 沒有油量資料，跳過")
-            continue
-
-        model_data = fetch_fuel_calibration(v["car_id"])
+        unicode = v["unicode"]
+        cust_id = v["cust_id"]
+        country = v.get('country', country)
         
-        # 檢查 model_data 是否為空
-        if (isinstance(model_data, pd.DataFrame) and model_data.empty) or (isinstance(model_data, list) and len(model_data) == 0):
-            print(f"警告：{v['car_id']} 沒有校正表資料，跳過")
+        # 自動判斷 fuel_sensor_type
+        model_data = fetch_fuel_calibration(unicode)
+        if not model_data or (isinstance(model_data, pd.DataFrame) and model_data.empty):
+            print(f"警告：{unicode} 沒有校正表資料，跳過")
             continue
+            
+        # 根據校正表資料判斷感測器類型
         if isinstance(model_data, pd.DataFrame):
-            print("model_data.columns:", model_data.columns)
+            if 'Voltage' in model_data.columns:
+                fuel_sensor_type = "stick"
+            else:
+                fuel_sensor_type = "adc"
         else:
-            print("model_data (list) sample:", model_data[:3])
-        # 取得油箱容量
-        if isinstance(model_data, pd.DataFrame):
-            tank_capacity = model_data['fuel_capacity'].max()
-        else:
-            tank_capacity = max([c[1] for c in model_data]) if model_data else None
+            # 如果是 list 格式，預設為 stick
+            fuel_sensor_type = "stick"
+            
+        print(f"車輛 {unicode} 使用 {fuel_sensor_type} 感測器")
 
-        detector = FuelEventDetector(model=model_data, fuel_data=fuel_df)
-        fuel_events = detector.detect_fuel_events()
-        if fuel_events is None or len(fuel_events) == 0:
-            print(f"警告：{v['car_id']} 沒有偵測到任何事件，跳過")
-            continue
-        detector.generate_report(fuel_events)
-        # 新增欄位
-        fuel_events['unicode'] = v['car_id']
-        fuel_events['tank_capacity'] = tank_capacity
-        all_events.append(fuel_events)
-    # 合併所有車的事件
-    if all_events:
-        merged = pd.concat(all_events, ignore_index=True)
-        # 將 unicode 和 tank_capacity 放最前面
-        cols = merged.columns.tolist()
-        if 'unicode' in cols:
-            cols.insert(0, cols.pop(cols.index('unicode')))
-        if 'tank_capacity' in cols:
-            cols.insert(1, cols.pop(cols.index('tank_capacity')))
-        merged = merged[cols]
+        # 1. 先抓取前30天的資料來計算自適應參數
+        calibration_catcher = CatchISData(country)
+        calibration_df = calibration_catcher.fetch_fuel_data(
+            fuel_sensor_type=fuel_sensor_type,
+            unicode=unicode,
+            start_time=calibration_start,
+            end_time=calibration_end
+        )
+
+        # 3. 使用前30天資料建立偵測器並計算自適應參數
+        calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
+        
+        # 4. 抓取指定時間範圍的資料
+        target_catcher = CatchISData(country)
+        target_df = target_catcher.fetch_fuel_data(
+            fuel_sensor_type=fuel_sensor_type,
+            unicode=unicode,
+            start_time=st,
+            end_time=et
+        )
+
+        # 5. 使用相同的自適應參數來偵測指定範圍的事件
+        target_detector = FuelEventDetector(model=model_data, fuel_data=target_df)
+        # 使用calibration_detector的參數來偵測
+        events = target_detector.detect_fuel_events(
+            auto_adapt=False,  # 不使用自動調整
+            min_increase=calibration_detector._calculate_adaptive_parameters()['min_increase'],
+            time_window_minutes=calibration_detector._calculate_adaptive_parameters()['time_window_minutes'],
+            smoothing_window=calibration_detector._calculate_adaptive_parameters()['smoothing_window'],
+            min_voltage_change=calibration_detector._calculate_adaptive_parameters()['min_voltage_change'],
+            stable_threshold=calibration_detector._calculate_adaptive_parameters()['stable_threshold']
+        )
+
+        # 6. 篩選指定範圍的加油事件
+        if events is not None and not events.empty:
+            events['event_date'] = pd.to_datetime(events['start_time']).dt.date
+            result = events[
+                (events['event_type'] == 'refuel') &
+                (events['event_date'] >= st.date()) &
+                (events['event_date'] <= et.date())
+            ]
+            if not result.empty:
+                result['unicode'] = unicode  # 加入車機碼
+                result['cust_id'] = cust_id  # 加入 cust_id
+                all_results.append(result)
+        else:
+            print(f"{unicode} 沒有偵測到任何事件")
+
+    if all_results:
+        merged = pd.concat(all_results, ignore_index=True)
+        
+        # 欄位名稱轉換
+        column_mapping = {
+            'start_time': 'starttime',
+            'end_time': 'endtime',
+            'location_x': 'gis_X',
+            'location_y': 'gis_Y',
+            'fuel_before': 'startfuellevel',
+            'fuel_after': 'endfuellevel',
+            'fuel_added': 'amount'
+        }
+        merged = merged.rename(columns=column_mapping)
         # 只保留 event_type 為 refuel 的事件
         merged = merged[merged['event_type'] == 'refuel']
-        # 輸出 CSV（可選）
+        
+        # 只保留必要欄位
+        keep_columns = [
+            'unicode', 'cust_id', 'starttime', 'endtime', 'gis_X', 'gis_Y',
+            'startfuellevel', 'endfuellevel', 'amount'
+        ]
+        merged = merged[keep_columns]
+        
+        # 輸出 CSV
         merged.to_csv("all_fuel_events.csv", index=False, encoding='utf-8-sig')
         print("已匯出 all_fuel_events.csv")
+        print("欄位名稱:", merged.columns.tolist())
         return merged
     else:
-        print("沒有任何車輛有事件資料")
-        return pd.DataFrame()  # 回傳空 DataFrame
+        print("所有車都沒有偵測到事件")
+        return pd.DataFrame()
 
-if __name__ == "__main__":
-    mode = "manual"  # or "manual"
-    csv_path = r"C:\work\MY\MY_ALL_Unicode.csv"
-    
-    manual_vehicles = [
+
+# 方式1：直接傳入車輛列表，限制處理5台車
+detect_refuel_events_for_range(
+    vehicles=[
         {
-            "car_id": "40002792",
-            "country": "MY",
-            "fuel_sensor_type": "stick",
-        },
-        # ...可再加更多車
-    ]
-    
-    # 這些參數都應該從 getdaily_compare.py 傳入
-    # limit = 1000  # 或 10
-    # prefer_status = None  # 或 "Good"
+            "unicode": "40005660",
+            "cust_id": "1320",
+            "country": "my"
+        }
+    ],
+    st=datetime(2025, 5, 1),
+    et=datetime(2025, 5, 15),
+    limit=5
+)
 
-    if mode == "csv":
-        results = process_vehicles(
-            csv_path=csv_path,
-            # start_time 和 end_time 從 getdaily_compare.py 傳入
-            # limit 從 getdaily_compare.py 傳入
-            # prefer_status 從 getdaily_compare.py 傳入
-        )
-    elif mode == "manual":
-        results = process_vehicles(
-            vehicles=manual_vehicles,
-            # start_time 和 end_time 從 getdaily_compare.py 傳入
-            # limit 從 getdaily_compare.py 傳入
-            # prefer_status 從 getdaily_compare.py 傳入
-        )
+# 方式2：從CSV讀取車輛列表，限制處理10台車
+detect_refuel_events_for_range(
+    csv_path=r"C:\work\MY\MY_ALL_Unicode.csv",
+    country="my",
+    st=datetime(2025, 5,3),
+    et=datetime(2025, 5, 5),
+    limit=5
+)
+
+
