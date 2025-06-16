@@ -81,7 +81,7 @@ def process_single_vehicle(country, cust_id, unicode, start_time, end_time):
             start_time=start_time,
             end_time=end_time,
             method="get"
-        )
+        ) 
         all_daily_reports = []
         if daily_report:
             if isinstance(daily_report, list):

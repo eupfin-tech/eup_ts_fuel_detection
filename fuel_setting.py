@@ -425,7 +425,7 @@ def getDailyReport(country, custId, unicode, start_time, end_time, method="get")
             # "endTimeExtended": "2025-02-11T16:00:00Z"
         },
     ).json()
-    pprint(data)
+    #pprint(data) 
     return data
 
 
