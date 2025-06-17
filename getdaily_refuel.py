@@ -8,7 +8,6 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
     all_refuel_events = []
     all_daily_reports = []
     try:
-        print(getDailyReport)
         daily_report = getDailyReport(
             country=country,
             custId=cust_id,
@@ -42,7 +41,7 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                 
                 # 找出有加油事件的記錄
                 if report.get('refillCount', 0) > 0:
-                    print(f"\n找到加油記錄 (refillCount: {report.get('refillCount', 0)})")
+                    #print(f"\n找到加油記錄 (refillCount: {report.get('refillCount', 0)})")
                     # 處理加油事件列表
                     fueleventlist = report.get('fuelEventList', [])
                     if isinstance(fueleventlist, str):
@@ -51,12 +50,11 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                         except:
                             fueleventlist = []
                     
-                    print(f"加油事件數量: {len(fueleventlist)}")
+                    #print(f"加油事件數量: {len(fueleventlist)}")
                     # 處理每個加油事件
                     for event in fueleventlist:
                         # 轉換欄位名稱為小寫
                         event = {k.lower(): v for k, v in event.items()}
-                        print(event) 
                         event['unicode'] = unicode
                         event['cust_id'] = cust_id
                         # 標準化地標欄位
@@ -79,10 +77,11 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                         start_fuel = float(event.get('startfuellevel', 0))
                         
                         if amount >= 10 and end_fuel > start_fuel:
-                            print("符合條件，加入事件")
+                            #print("符合條件，加入事件")
                             all_refuel_events.append(event)
                         else:
-                            print("不符合條件，跳過事件")
+                            #print("不符合條件，跳過事件")
+                            pass
         else:
             print("getDailyReport API 呼叫成功但沒有返回數據")
             
@@ -91,33 +90,6 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
         print(f"處理 getDailyReport 時發生錯誤: {e}")
         return [], []
 
-
-def process_daily_refuel_singal(country, cust_id, unicode, start_time, end_time):
-    """處理單一車輛的 getDailyReport，回傳 DataFrame"""
-    reports, events = getdaily_refuel_events(country, cust_id, unicode, start_time, end_time)
-    
-    # 將加油事件轉換為 DataFrame
-    if events:
-        df_events = pd.DataFrame(events)
-        df_events['unicode'] = df_events['unicode'].astype(str)
-        
-        # 選擇要顯示的欄位並排序
-        columns_to_show = ['unicode', 'cust_id', 'starttime', 'endtime', 'startfuellevel', 'endfuellevel', 'amount']
-        df_events = df_events.reindex(columns=columns_to_show)
-        
-        # 格式化時間
-        for col in ['starttime', 'endtime']:
-            if col in df_events.columns:
-                df_events[col] = pd.to_datetime(df_events[col]).dt.strftime('%Y-%m-%d %H:%M:%S')
-        
-        print("\n整理後的加油事件 DataFrame:")
-        print("="*50)
-        print(df_events.to_string(index=False))
-        print("="*50 + "\n")
-        return reports, df_events
-    else:
-        print("沒有找到加油事件")
-        return reports, pd.DataFrame()
 
 
 def process_daily_refuel_multi(
@@ -175,30 +147,30 @@ def process_daily_refuel_multi(
         for col in ['starttime', 'endtime']:
             if col in df_events.columns:
                 df_events[col] = pd.to_datetime(df_events[col]).dt.strftime('%Y-%m-%d %H:%M:%S')
-        df_events.to_csv(r"C:\\work\\eup_fuel_detection\\getdaily_refuel.csv", index=False, encoding='utf-8-sig')
-        return all_daily_reports, df_events
+        #df_events.to_csv(r"C:\\work\\eup_fuel_detection\\getdaily_refuel.csv", index=False, encoding='utf-8-sig')
+        return df_events 
+        #return all_daily_reports, df_events
     else:
         print("沒有找到加油事件")
-        return all_daily_reports, pd.DataFrame()
+        return pd.DataFrame()
+        #return all_daily_reports, df_events
 
+#process_daily_refuel_multi(
+#    vehicles=[
+#          {
+#            "unicode": "40005660",
+#            "cust_id": "1320",
+#            "country": "my"
+#            }
+#    ],
+#    st=datetime(2025, 5, 1),
+#    et=datetime(2025, 5, 15)
+#)
 
-process_daily_refuel_multi(
-    vehicles=[
-        {
-            "unicode": "40005660",
-            "cust_id": "1320",
-            "country": "my"
-            }
-    ],
-    st=datetime(2025, 5, 1),
-    et=datetime(2025, 5, 15),
-    limit=5
-)
-
-process_daily_refuel_multi(
-    csv_path=r"C:\\work\\MY\\MY_ALL_Unicode.csv",
-    country="my",
-    st=datetime(2025, 5, 1),
-    et=datetime(2025, 5, 15),
-    limit=5
-)
+#process_daily_refuel_multi(
+#    csv_path=r"C:\\work\\MY\\MY_ALL_Unicode.csv",
+#    country="my",
+#    st=datetime(2025, 5, 1),
+#    et=datetime(2025, 5, 15),
+#    limit=5
+#)

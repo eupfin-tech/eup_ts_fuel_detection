@@ -96,7 +96,6 @@ class FuelEventDetector:
         """評估數據品質"""
         # 根據噪音水平和變化率判斷數據品質
         noise_ratio = profile['noise_level'] / profile['std_voltage'] if profile['std_voltage'] > 0 else 0
-        print(f"noise_ratio: {noise_ratio}")
         if noise_ratio < 0.1:
             return 'high'
         elif noise_ratio < 0.3:
@@ -280,7 +279,7 @@ class FuelEventDetector:
         start_time = self.fuel_df.iloc[start_idx]['time']
         
         # 獲取事件前的穩定值
-        look_back = min(10, start_idx)
+        look_back = min(15, start_idx)
         voltage_before = self.fuel_df.iloc[max(0, start_idx-look_back):start_idx]['smooth_voltage'].median() if start_idx > 0 else self.fuel_df.iloc[start_idx]['smooth_voltage']
         
         # 根據事件類型設定追蹤邏輯
@@ -302,9 +301,8 @@ class FuelEventDetector:
             time_elapsed = (self.fuel_df.iloc[j]['time'] - start_time).total_seconds() / 60
             
             # 如果超過時間窗口，結束追蹤
-            if time_elapsed > time_window_minutes * 3:
+            if time_elapsed > time_window_minutes * 3:  # 增加時間窗口
                 break
-            
             if compare_func(current_voltage, extreme_voltage):
                 extreme_voltage = current_voltage
                 end_idx = j
@@ -317,8 +315,8 @@ class FuelEventDetector:
                 else:
                     consecutive_stable = 0
                 
-                # 如果連續穩定超過閾值，且已有顯著變化
-                if consecutive_stable >= 10 and total_change > min_voltage_change * 0.5:
+                # 如果連續穩定超過閾值，且已有顯著變化 10 0.5
+                if consecutive_stable >= 5 and total_change > min_voltage_change * 0.5:  # 降低穩定判斷和變化量要求
                     break
             
             # 對於偷油事件，即使沒有連續下降，也要檢查累積變化
@@ -436,10 +434,8 @@ class FuelEventDetector:
         merged_events.append(current_event)
         
         return merged_events
-    
-    
-    
-    def generate_report(self, events_df):
+     
+''' def generate_report(self, events_df):
         """生成油量事件報告"""
         print("="*60)
         print("Fuel Event Detection Report")
@@ -499,7 +495,7 @@ class FuelEventDetector:
                 print(f"  Max Single Theft: {theft_events['fuel_loss'].max():.1f} L")
                 print(f"  Min Single Theft: {theft_events['fuel_loss'].min():.1f} L")
         else:
-            print("No fuel events detected.")
+            print("No fuel events detected.")'''
 
 class CatchISData:
     def __init__(self, country):
@@ -634,7 +630,7 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
         print(f"限制處理 {limit} 台車輛")
 
     # 計算前30天的時間範圍（不包含st當天）
-    calibration_start = st - timedelta(days=40)
+    calibration_start = st - timedelta(days = 35)
     calibration_end = st - timedelta(days=1)  # 到st的前一天
     print("calibration_start:", calibration_start)
     print("calibration_end:", calibration_end)
@@ -661,39 +657,37 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
             # 如果是 list 格式，預設為 stick
             fuel_sensor_type = "stick"
             
-        print(f"車輛 {unicode} 使用 {fuel_sensor_type} 感測器")
+        #print(f"車輛 {unicode} 使用 {fuel_sensor_type} 感測器")
 
-        # 1. 先抓取前30天的資料來計算自適應參數
-        calibration_catcher = CatchISData(country)
-        calibration_df = calibration_catcher.fetch_fuel_data(
+        # 1. 抓取所有需要的資料（校準期間 + 目標期間）
+        is_catcher = CatchISData(country)
+        all_df = is_catcher.fetch_fuel_data(
             fuel_sensor_type=fuel_sensor_type,
             unicode=unicode,
-            start_time=calibration_start,
-            end_time=calibration_end
+            start_time=calibration_start,  # 從校準開始時間
+            end_time=et  # 到目標結束時間
         )
 
-        # 3. 使用前30天資料建立偵測器並計算自適應參數
-        calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
+        # 2. 切分資料為校準期間和目標期間(datetime格式)
+        all_df['time'] = pd.to_datetime(all_df['time'])
+        calibration_df = all_df[all_df['time'] < st].copy()
+        target_df = all_df[all_df['time'] >= st].copy()
         
-        # 4. 抓取指定時間範圍的資料
-        target_catcher = CatchISData(country)
-        target_df = target_catcher.fetch_fuel_data(
-            fuel_sensor_type=fuel_sensor_type,
-            unicode=unicode,
-            start_time=st,
-            end_time=et
-        )
-
-        # 5. 使用相同的自適應參數來偵測指定範圍的事件
-        target_detector = FuelEventDetector(model=model_data, fuel_data=target_df)
-        # 使用calibration_detector的參數來偵測
-        events = target_detector.detect_fuel_events(
+        # 3. 使用校準期間資料建立偵測器並計算自適應參數(calibration_df)
+        calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
+        adaptive_params = calibration_detector._calculate_adaptive_parameters()
+        
+        # 4. 更新偵測器的資料為目標期間
+        calibration_detector.fuel_df = target_df
+        
+        # 5. 使用校準期間的參數來偵測目標期間的事件
+        events = calibration_detector.detect_fuel_events(
             auto_adapt=False,  # 不使用自動調整
-            min_increase=calibration_detector._calculate_adaptive_parameters()['min_increase'],
-            time_window_minutes=calibration_detector._calculate_adaptive_parameters()['time_window_minutes'],
-            smoothing_window=calibration_detector._calculate_adaptive_parameters()['smoothing_window'],
-            min_voltage_change=calibration_detector._calculate_adaptive_parameters()['min_voltage_change'],
-            stable_threshold=calibration_detector._calculate_adaptive_parameters()['stable_threshold']
+            min_increase=adaptive_params['min_increase'],
+            time_window_minutes=adaptive_params['time_window_minutes'],
+            smoothing_window=adaptive_params['smoothing_window'],
+            min_voltage_change=adaptive_params['min_voltage_change'],
+            stable_threshold=adaptive_params['stable_threshold']
         )
 
         # 6. 篩選指定範圍的加油事件
@@ -736,9 +730,9 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
         merged = merged[keep_columns]
         
         # 輸出 CSV
-        merged.to_csv("all_fuel_events.csv", index=False, encoding='utf-8-sig')
-        print("已匯出 all_fuel_events.csv")
-        print("欄位名稱:", merged.columns.tolist())
+        #merged.to_csv("all_fuel_events.csv", index=False, encoding='utf-8-sig')
+        #print("已匯出 all_fuel_events.csv")
+        #print("欄位名稱:", merged.columns.tolist())
         return merged
     else:
         print("所有車都沒有偵測到事件")
@@ -746,26 +740,26 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
 
 
 # 方式1：直接傳入車輛列表，限制處理5台車
-detect_refuel_events_for_range(
-    vehicles=[
-        {
-            "unicode": "40005660",
-            "cust_id": "1320",
-            "country": "my"
-        }
-    ],
-    st=datetime(2025, 5, 1),
-    et=datetime(2025, 5, 15),
-    limit=5
-)
+#detect_refuel_events_for_range(
+#    vehicles=[
+#        {
+#            "unicode": "40005660",
+#            "cust_id": "1320",
+#            "country": "my"
+#        }
+#    ],
+#    st=datetime(2025, 5, 1),
+#    et=datetime(2025, 5, 15),
+#    limit=5
+#)
 
 # 方式2：從CSV讀取車輛列表，限制處理10台車
-detect_refuel_events_for_range(
-    csv_path=r"C:\work\MY\MY_ALL_Unicode.csv",
-    country="my",
-    st=datetime(2025, 5,3),
-    et=datetime(2025, 5, 5),
-    limit=5
-)
+# detect_refuel_events_for_range(
+#    csv_path=r"C:\work\MY\MY_ALL_Unicode.csv",
+#    country="my",
+#    st=datetime(2025, 5,3),
+#    et=datetime(2025, 5, 5),
+#    limit=5
+#)
 
 
