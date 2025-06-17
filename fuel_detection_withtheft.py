@@ -1,11 +1,10 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
-import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from scipy import stats
 from crm_model import fetch_fuel_calibration
-import requests
+import requests 
 
 class FuelEventDetector:
     """油量事件偵測器 - 自適應版本"""

@@ -236,12 +236,14 @@ if __name__ == "__main__":
     }
     
     # 比對指定日期範圍的加油事件
+    start_date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    end_date = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
     matched, only_python, only_java = compare_refuel_events(
-        start_date="2025-05-12",
-        end_date="2025-05-13",
+        start_date=start_date,
+        end_date=end_date,
         csv_path=r"C:\work\MY\MY_ALL_Unicode.csv",
         country="my",
         limit=5,
-        send_email= False,
+        send_email=False,
         email_config=email_config
     ) 

@@ -1,5 +1,5 @@
 from fuel_setting import getDailyReport
-import pandas as pd
+import pandas as pd 
 import json
 from datetime import timedelta, datetime, date
 
@@ -7,6 +7,9 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
     """處理 getDailyReport 中的加油事件"""
     all_refuel_events = []
     all_daily_reports = []
+    
+    #fueleventlist 會隱含有凌晨的加油事件，所以需要減去30分鐘(提前搜索)
+    start_time = start_time - timedelta(hours = 1) 
     try:
         daily_report = getDailyReport(
             country=country,
@@ -16,7 +19,6 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
             end_time=end_time,
             method="get"
         )
-        
         if daily_report:
             # 確保 daily_report 是列表格式
             if isinstance(daily_report, str):
@@ -72,11 +74,18 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                         # 篩選條件：
                         # 1. 加油量 >= 10
                         # 2. 結束油量 > 開始油量
+                        # 3. 加油時間在 start_time 和 end_time 之間
                         amount = float(event.get('amount', 0))
                         end_fuel = float(event.get('endfuellevel', 0))
                         start_fuel = float(event.get('startfuellevel', 0))
                         
-                        if amount >= 10 and end_fuel > start_fuel:
+                        # 這邊要篩選時間，確保加油時間在 start_time 和 end_time 之間
+                        orig_start_time = start_time + timedelta(hours = 1)  
+                        if event['starttime'].tzinfo is not None and orig_start_time.tzinfo is None:
+                            orig_start_time = orig_start_time.replace(tzinfo=event['starttime'].tzinfo)
+                            
+                        if amount >= 10 and end_fuel > start_fuel and event['starttime'] >= orig_start_time:
+                            print(event['starttime'])
                             #print("符合條件，加入事件")
                             all_refuel_events.append(event)
                         else:
@@ -89,7 +98,6 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
     except Exception as e:
         print(f"處理 getDailyReport 時發生錯誤: {e}")
         return [], []
-
 
 
 def process_daily_refuel_multi(
