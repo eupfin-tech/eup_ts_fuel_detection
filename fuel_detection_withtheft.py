@@ -30,7 +30,20 @@ class FuelEventDetector:
             # 預設視為 list of tuple
             self.model_df = pd.DataFrame(model, columns=['output_signal', 'fuel_capacity'])
 
+        # 去除 NaN
+        self.model_df = self.model_df.dropna(subset=['output_signal', 'fuel_capacity'])
+        # 對重複的 output_signal 取平均，只保留一筆
+        self.model_df = self.model_df.groupby('output_signal', as_index=False)['fuel_capacity'].mean()
+        self.model_df = self.model_df.drop_duplicates(subset=['output_signal'])
         self.model_df = self.model_df.sort_values('output_signal')
+
+        # 如果資料筆數不足2，補一筆 (0, 0)
+        if len(self.model_df) < 2:
+            self.model_df = pd.concat([
+                pd.DataFrame([{'output_signal': 0, 'fuel_capacity': 0}]),
+                self.model_df
+            ], ignore_index=True)
+            self.model_df = self.model_df.sort_values('output_signal')
         
         # 建立插值函數 (電壓 -> 油量)
         self.voltage_to_fuel = interp1d(
@@ -73,7 +86,7 @@ class FuelEventDetector:
         
         # 計算噪音水平（使用短期移動平均的標準差）
         rolling_std = self.fuel_df['instant_fuel'].rolling(window=10).std()
-        profile['noise_level'] = np.nanmean(rolling_std)
+        profile['noise_level'] = np.nanmean(rolling_std) if not rolling_std.dropna().empty else 0
         
         # 計算數據採樣頻率
         time_diffs = self.fuel_df['time'].diff().dt.total_seconds()
@@ -635,6 +648,7 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
     print("calibration_end:", calibration_end)
     
     all_results = []
+    python_no_data_list = []
     for v in vehicles:
         unicode = v["unicode"]
         cust_id = v["cust_id"]
@@ -658,19 +672,48 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
             
         #print(f"車輛 {unicode} 使用 {fuel_sensor_type} 感測器")
 
-        # 1. 抓取所有需要的資料（校準期間 + 目標期間）
+        # 1. 先查一次原本的區間
         is_catcher = CatchISData(country)
         all_df = is_catcher.fetch_fuel_data(
             fuel_sensor_type=fuel_sensor_type,
             unicode=unicode,
-            start_time=calibration_start,  # 從校準開始時間
-            end_time=et  # 到目標結束時間
+            start_time=calibration_start,
+            end_time=et
         )
+
+        # 2. 如果沒資料，再往前找
+        if all_df.empty:
+            max_lookback_days = 90
+            lookback_days = 30
+            lookback_step = 30
+            found = False
+            while lookback_days < max_lookback_days:
+                calibration_start_lookback = st - timedelta(days=35 + lookback_days)
+                query_end_lookback = et - timedelta(days=lookback_days)
+                print(f"車輛 {unicode} 往前查詢區間: {calibration_start_lookback} ~ {query_end_lookback}")
+
+                all_df = is_catcher.fetch_fuel_data(
+                    fuel_sensor_type=fuel_sensor_type,
+                    unicode=unicode,
+                    start_time=calibration_start_lookback,
+                    end_time=query_end_lookback
+                )
+                if not all_df.empty:
+                    found = True
+                    break
+                else:
+                    lookback_days += lookback_step
+
+            if all_df.empty:
+                print(f"車輛 {unicode} 查到最久還是沒有資料，跳過")
+                python_no_data_list.append(unicode)
+                continue
 
         # 2. 切分資料為校準期間和目標期間(datetime格式)
         all_df['time'] = pd.to_datetime(all_df['time'])
         calibration_df = all_df[all_df['time'] < st].copy()
         target_df = all_df[all_df['time'] >= st].copy()
+        
         
         # 3. 使用校準期間資料建立偵測器並計算自適應參數(calibration_df)
         calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
@@ -732,23 +775,23 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
         #merged.to_csv("all_fuel_events.csv", index=False, encoding='utf-8-sig')
         #print("已匯出 all_fuel_events.csv")
         #print("欄位名稱:", merged.columns.tolist())
-        return merged
+        return merged, python_no_data_list
     else:
         print("所有車都沒有偵測到事件")
-        return pd.DataFrame()
+        return pd.DataFrame(), python_no_data_list
 
 
 # 方式1：直接傳入車輛列表，限制處理5台車
 #detect_refuel_events_for_range(
 #    vehicles=[
 #        {
-#            "unicode": "40005660",
-#            "cust_id": "1320",
+#            "unicode": "40009086",
+#            "cust_id": "1423",
 #            "country": "my"
 #        }
 #    ],
-#    st=datetime(2025, 5, 1),
-#    et=datetime(2025, 5, 15),
+#    st=datetime(2025, 6, 15),
+#    et=datetime(2025, 6, 17),
 #    limit=5
 #)
 

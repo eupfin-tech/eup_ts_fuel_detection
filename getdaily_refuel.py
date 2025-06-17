@@ -85,7 +85,6 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                             orig_start_time = orig_start_time.replace(tzinfo=event['starttime'].tzinfo)
                             
                         if amount >= 10 and end_fuel > start_fuel and event['starttime'] >= orig_start_time:
-                            print(event['starttime'])
                             #print("符合條件，加入事件")
                             all_refuel_events.append(event)
                         else:
@@ -115,6 +114,7 @@ def process_daily_refuel_multi(
     """
     all_daily_reports = []
     all_refuel_events = []
+    java_no_data_list = []
 
     # 1. 處理車輛清單
     if vehicles:
@@ -145,6 +145,8 @@ def process_daily_refuel_multi(
         reports, events = getdaily_refuel_events(car_country, cust_id, unicode, st, et)
         all_daily_reports.extend(reports)
         all_refuel_events.extend(events)
+        if not events:
+            java_no_data_list.append(unicode)
 
     # 3. 輸出 DataFrame
     if all_refuel_events:
@@ -156,23 +158,21 @@ def process_daily_refuel_multi(
             if col in df_events.columns:
                 df_events[col] = pd.to_datetime(df_events[col]).dt.strftime('%Y-%m-%d %H:%M:%S')
         #df_events.to_csv(r"C:\\work\\eup_fuel_detection\\getdaily_refuel.csv", index=False, encoding='utf-8-sig')
-        return df_events 
-        #return all_daily_reports, df_events
+        return df_events, java_no_data_list
     else:
         print("沒有找到加油事件")
-        return pd.DataFrame()
-        #return all_daily_reports, df_events
+        return pd.DataFrame(), java_no_data_list
 
 #process_daily_refuel_multi(
 #    vehicles=[
 #          {
-#            "unicode": "40005660",
-#            "cust_id": "1320",
+#            "unicode": "40009086",
+#            "cust_id": "1423",
 #            "country": "my"
 #            }
 #    ],
-#    st=datetime(2025, 5, 1),
-#    et=datetime(2025, 5, 15)
+#    st=datetime(2025, 6, 15),
+#    et=datetime(2025, 6, 17)
 #)
 
 #process_daily_refuel_multi(
