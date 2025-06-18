@@ -17,7 +17,6 @@ class FuelEventDetector:
             - pd.DataFrame，且有 output_signal, fuel_capacity 欄位
         fuel_data: 車輛油量數據CSV檔案路徑或 DataFrame
         """
-        import pandas as pd
  
         # 處理 model
         if isinstance(model, str):
@@ -63,6 +62,11 @@ class FuelEventDetector:
         self.fuel_df = self.fuel_df.sort_values('time')
         
         # 轉換電壓為油量
+        self.fuel_df['instant_fuel'] = pd.to_numeric(self.fuel_df['instant_fuel'], errors='coerce')
+        self.fuel_df = self.fuel_df[self.fuel_df['instant_fuel'].notnull()]
+        if self.fuel_df.empty:
+            # 這裡直接 raise 或 return，讓主流程記錄到 no_data
+            raise ValueError("No valid instant_fuel data")
         self.fuel_df['fuel_liters'] = self.voltage_to_fuel(self.fuel_df['instant_fuel'])
         
         # 分析數據特徵
@@ -291,7 +295,7 @@ class FuelEventDetector:
         start_time = self.fuel_df.iloc[start_idx]['time']
         
         # 獲取事件前的穩定值
-        look_back = min(15, start_idx)
+        look_back = min(10, start_idx)
         voltage_before = self.fuel_df.iloc[max(0, start_idx-look_back):start_idx]['smooth_voltage'].median() if start_idx > 0 else self.fuel_df.iloc[start_idx]['smooth_voltage']
         
         # 根據事件類型設定追蹤邏輯
@@ -328,7 +332,7 @@ class FuelEventDetector:
                     consecutive_stable = 0
                 
                 # 如果連續穩定超過閾值，且已有顯著變化 10 0.5
-                if consecutive_stable >= 5 and total_change > min_voltage_change * 0.5:  # 降低穩定判斷和變化量要求
+                if consecutive_stable >= 8 and total_change > min_voltage_change * 0.5:  # 降低穩定判斷和變化量要求
                     break
             
             # 對於偷油事件，即使沒有連續下降，也要檢查累積變化
@@ -409,7 +413,7 @@ class FuelEventDetector:
                     # 檢查期間的速度
                     speeds_during_event = self.fuel_df.iloc[start_idx:end_idx+1]['speed'].values
                     if len(speeds_during_event) == 0:
-                        avg_speed = 0
+                        avg_speed = 0 
                         max_speed = 0
                     else:
                         avg_speed = np.mean(speeds_during_event)
@@ -451,68 +455,6 @@ class FuelEventDetector:
         
         return merged_events
      
-''' def generate_report(self, events_df):
-        """生成油量事件報告"""
-        print("="*60)
-        print("Fuel Event Detection Report")
-        print("="*60)
-        print(f"Data Period: {self.fuel_df['time'].min()} to {self.fuel_df['time'].max()}")
-        print(f"Total Data Points: {len(self.fuel_df):,}")
-        print(f"Data Quality: {self.data_profile['data_quality']}")
-        
-        if len(events_df) > 0:
-            refuel_events = events_df[events_df['event_type'] == 'refuel']
-            theft_events = events_df[events_df['event_type'] == 'theft']
-            
-            print(f"Detected Refuel Events: {len(refuel_events)}")
-            print(f"Detected Theft Events: {len(theft_events)}")
-            print()
-            
-            if len(refuel_events) > 0:
-                print("Refuel Event Details:")
-                print("-"*60)
-                
-                for idx, event in refuel_events.iterrows():
-                    print(f"\nRefuel Event {idx+1}:")
-                    print(f"  Time: {event['start_time']} - {event['end_time']}")
-                    print(f"  Duration: {event['duration_minutes']:.1f} minutes")
-                    print(f"  Fuel Before: {event['fuel_before']:.1f} L")
-                    print(f"  Fuel After: {event['fuel_after']:.1f} L")
-                    print(f"  Fuel Added: {event['fuel_added']:.1f} L")
-                    print(f"  Voltage Change: {event['voltage_change']:.0f} ({event['voltage_before']:.0f} → {event['voltage_after']:.0f})")
-                    print(f"  Change Rate: {event['change_rate']:.1f} voltage/min")
-                    print(f"  Location: ({event['location_x']:.0f}, {event['location_y']:.0f})")
-                
-                print("\nRefuel Summary:")
-                print(f"  Total Fuel Added: {refuel_events['fuel_added'].sum():.1f} L")
-                print(f"  Average Refuel Amount: {refuel_events['fuel_added'].mean():.1f} L")
-                print(f"  Max Single Refuel: {refuel_events['fuel_added'].max():.1f} L")
-                print(f"  Min Single Refuel: {refuel_events['fuel_added'].min():.1f} L")
-            
-            if len(theft_events) > 0:
-                print("\n" + "="*60)
-                print("Theft Event Details:")
-                print("-"*60)
-                
-                for idx, event in theft_events.iterrows():
-                    print(f"\nTheft Event {idx+1}:")
-                    print(f"  Time: {event['start_time']} - {event['end_time']}")
-                    print(f"  Duration: {event['duration_minutes']:.1f} minutes")
-                    print(f"  Fuel Before: {event['fuel_before']:.1f} L")
-                    print(f"  Fuel After: {event['fuel_after']:.1f} L")
-                    print(f"  Fuel Lost: {event['fuel_loss']:.1f} L")
-                    print(f"  Voltage Change: {event['voltage_change']:.0f} ({event['voltage_before']:.0f} → {event['voltage_after']:.0f})")
-                    print(f"  Change Rate: {abs(event['change_rate']):.1f} voltage/min")
-                    print(f"  Location: ({event['location_x']:.0f}, {event['location_y']:.0f})")
-                
-                print("\nTheft Summary:")
-                print(f"  Total Fuel Lost: {theft_events['fuel_loss'].sum():.1f} L")
-                print(f"  Average Theft Amount: {theft_events['fuel_loss'].mean():.1f} L")
-                print(f"  Max Single Theft: {theft_events['fuel_loss'].max():.1f} L")
-                print(f"  Min Single Theft: {theft_events['fuel_loss'].min():.1f} L")
-        else:
-            print("No fuel events detected.")'''
-
 class CatchISData:
     def __init__(self, country):
         self.country = country
@@ -653,103 +595,108 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
     
     all_results = []
     python_no_data_list = []
+    python_error_vehicles = []  # 修改：改名為 python_error_vehicles
+    
     for v in vehicles:
         unicode = v["unicode"]
         cust_id = v["cust_id"]
         country = v.get('country', country)
         
-        # 自動判斷 fuel_sensor_type
-        model_data = fetch_fuel_calibration(unicode)
-        if not model_data or (isinstance(model_data, pd.DataFrame) and model_data.empty):
-            print(f"警告：{unicode} 沒有校正表資料，跳過")
-            continue
-            
-        # 根據校正表資料判斷感測器類型
-        if isinstance(model_data, pd.DataFrame):
-            if 'Voltage' in model_data.columns:
-                fuel_sensor_type = "stick"
-            else:
-                fuel_sensor_type = "adc"
-        else:
-            # 如果是 list 格式，預設為 stick
-            fuel_sensor_type = "stick"
-            
-        #print(f"車輛 {unicode} 使用 {fuel_sensor_type} 感測器")
-
-        # 1. 先查一次原本的區間
-        is_catcher = CatchISData(country)
-        all_df = is_catcher.fetch_fuel_data(
-            fuel_sensor_type=fuel_sensor_type,
-            unicode=unicode,
-            start_time=calibration_start,
-            end_time=et
-        )
-
-        # 2. 如果沒資料，再往前找
-        if all_df.empty:
-            max_lookback_days = 90
-            lookback_days = 30
-            lookback_step = 30
-            found = False
-            while lookback_days < max_lookback_days:
-                calibration_start_lookback = st - timedelta(days=35 + lookback_days)
-                query_end_lookback = et - timedelta(days=lookback_days)
-                print(f"車輛 {unicode} 往前查詢區間: {calibration_start_lookback} ~ {query_end_lookback}")
-
-                all_df = is_catcher.fetch_fuel_data(
-                    fuel_sensor_type=fuel_sensor_type,
-                    unicode=unicode,
-                    start_time=calibration_start_lookback,
-                    end_time=query_end_lookback
-                )
-                if not all_df.empty:
-                    found = True
-                    break
-                else:
-                    lookback_days += lookback_step
-
-            if all_df.empty:
-                print(f"車輛 {unicode} 查到最久還是沒有資料，跳過")
-                python_no_data_list.append(unicode)
+        try:
+            # 自動判斷 fuel_sensor_type
+            model_data = fetch_fuel_calibration(unicode)
+            if not model_data or (isinstance(model_data, pd.DataFrame) and model_data.empty):
+                print(f"警告：{unicode} 沒有校正表資料，跳過")
                 continue
+                
+            # 根據校正表資料判斷感測器類型
+            if isinstance(model_data, pd.DataFrame):
+                if 'Voltage' in model_data.columns:
+                    fuel_sensor_type = "stick"
+                else:
+                    fuel_sensor_type = "adc"
+            else:
+                # 如果是 list 格式，預設為 stick
+                fuel_sensor_type = "stick"
 
-        # 2. 切分資料為校準期間和目標期間(datetime格式)
-        all_df['time'] = pd.to_datetime(all_df['time'])
-        calibration_df = all_df[all_df['time'] < st].copy()
-        target_df = all_df[all_df['time'] >= st].copy()
-        
-        
-        # 3. 使用校準期間資料建立偵測器並計算自適應參數(calibration_df)
-        calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
-        adaptive_params = calibration_detector._calculate_adaptive_parameters()
-        
-        # 4. 更新偵測器的資料為目標期間
-        calibration_detector.fuel_df = target_df
-        
-        # 5. 使用校準期間的參數來偵測目標期間的事件
-        events = calibration_detector.detect_fuel_events(
-            auto_adapt=False,  # 不使用自動調整
-            min_increase=adaptive_params['min_increase'],
-            time_window_minutes=adaptive_params['time_window_minutes'],
-            smoothing_window=adaptive_params['smoothing_window'],
-            min_voltage_change=adaptive_params['min_voltage_change'],
-            stable_threshold=adaptive_params['stable_threshold']
-        )
+            # 1. 先查一次原本的區間
+            is_catcher = CatchISData(country)
+            all_df = is_catcher.fetch_fuel_data(
+                fuel_sensor_type=fuel_sensor_type,
+                unicode=unicode,
+                start_time=calibration_start,
+                end_time=et
+            )
 
-        # 6. 篩選指定範圍的加油事件
-        if events is not None and not events.empty:
-            events['event_date'] = pd.to_datetime(events['start_time']).dt.date
-            result = events[
-                (events['event_type'] == 'refuel') &
-                (events['event_date'] >= st.date()) &
-                (events['event_date'] <= et.date())
-            ]
-            if not result.empty:
-                result['unicode'] = unicode  # 加入車機碼
-                result['cust_id'] = cust_id  # 加入 cust_id
-                all_results.append(result)
-        else:
-            print(f"{unicode} 沒有偵測到任何事件")
+            # 2. 如果沒資料，再往前找
+            if all_df.empty:
+                max_lookback_days = 60
+                lookback_days = 30
+                lookback_step = 30
+                found = False
+                while lookback_days < max_lookback_days:
+                    calibration_start_lookback = st - timedelta(days=30 + lookback_days)
+                    query_end_lookback = et - timedelta(days=lookback_days)
+                    print(f"車輛 {unicode} 往前查詢區間: {calibration_start_lookback} ~ {query_end_lookback}")
+
+                    all_df = is_catcher.fetch_fuel_data(
+                        fuel_sensor_type=fuel_sensor_type,
+                        unicode=unicode,
+                        start_time=calibration_start_lookback,
+                        end_time=query_end_lookback
+                    )
+                    if not all_df.empty:
+                        found = True
+                        break
+                    else:
+                        lookback_days += lookback_step
+
+                if all_df.empty:
+                    print(f"車輛 {unicode} 查到最久還是沒有資料，跳過")
+                    python_no_data_list.append(unicode)
+                    continue
+
+            # 2. 切分資料為校準期間和目標期間(datetime格式)
+            all_df['time'] = pd.to_datetime(all_df['time'])
+            calibration_df = all_df[all_df['time'] < st].copy()
+            target_df = all_df[all_df['time'] >= st].copy()
+            
+            # 3. 使用校準期間資料建立偵測器並計算自適應參數(calibration_df)
+            calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
+            adaptive_params = calibration_detector._calculate_adaptive_parameters()
+            
+            # 4. 更新偵測器的資料為目標期間
+            calibration_detector.fuel_df = target_df
+            
+            # 5. 使用校準期間的參數來偵測目標期間的事件
+            events = calibration_detector.detect_fuel_events(
+                auto_adapt = False,  # 不使用自動調整
+                min_increase = adaptive_params['min_increase'],
+                time_window_minutes = adaptive_params['time_window_minutes'],
+                smoothing_window = adaptive_params['smoothing_window'],
+                min_voltage_change = adaptive_params['min_voltage_change'],
+                stable_threshold = adaptive_params['stable_threshold']
+            )
+
+            # 6. 篩選指定範圍的加油事件
+            if events is not None and not events.empty:
+                events['event_date'] = pd.to_datetime(events['start_time']).dt.date
+                result = events[
+                    (events['event_type'] == 'refuel') &
+                    (events['event_date'] >= st.date()) &
+                    (events['event_date'] <= et.date())
+                ].copy()
+                if not result.empty:
+                    result.loc[:, 'unicode'] = unicode
+                    result.loc[:, 'cust_id'] = cust_id
+                    all_results.append(result)
+            else:
+                print(f"{unicode} 沒有偵測到任何事件")
+
+        except Exception as e:
+            print(f"[錯誤] 處理車輛 {unicode} 時發生錯誤: {str(e)}")
+            python_error_vehicles.append(unicode)  # 修改：改名為 python_error_vehicles
+            continue
 
     if all_results:
         merged = pd.concat(all_results, ignore_index=True)
@@ -775,14 +722,10 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
         ]
         merged = merged[keep_columns]
         
-        # 輸出 CSV
-        #merged.to_csv("all_fuel_events.csv", index=False, encoding='utf-8-sig')
-        #print("已匯出 all_fuel_events.csv")
-        #print("欄位名稱:", merged.columns.tolist())
-        return merged, python_no_data_list
+        return merged, python_no_data_list, python_error_vehicles  # 修改：改名為 python_error_vehicles
     else:
         print("所有車都沒有偵測到事件")
-        return pd.DataFrame(), python_no_data_list
+        return pd.DataFrame(), python_no_data_list, python_error_vehicles  # 修改：改名為 python_error_vehicles
 
 
 # 方式1：直接傳入車輛列表，限制處理5台車

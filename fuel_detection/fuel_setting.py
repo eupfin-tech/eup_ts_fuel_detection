@@ -1273,7 +1273,7 @@ def taskRemoveDup():
 
 
 if __name__ == "__main__":
-    print(getDailyReport("my-stage2", "522", "40003070", "2025-06-5T16:00:00Z", "2025-06-06T15:59:59Z", "get"))    #rerunByUnicodes("vn", unicodes)
+    #print(getDailyReport("my-stage2", "522", "40003070", "2025-06-5T16:00:00Z", "2025-06-06T15:59:59Z", "get"))    #rerunByUnicodes("vn", unicodes)
     #pprint(getRedis("vn", "fuel:unicode:30081123", "hash"))
     #rerunByUnicodes("my", "40011716")
                 # "startTime": "2024-12-16T16:00:00Z",
@@ -1320,7 +1320,7 @@ if __name__ == "__main__":
     # saveTbFuelRecord("vn", data_tb_fuel_records)
     # syncRedis("vn", "30055562")
     # showCustomerOptions()
-    getDailyReport("my", 1127, "40009915", "2025-05-03T16:00:00Z", "2025-05-05T15:59:59Z", 'get')
+    #print(getDailyReport("my", 1127, "40006979", "2025-06-17T00:00:00Z", "2025-06-18T15:59:59Z", 'get'))
     # getDailyReport("my", 1379, "40009602", "2024-12-02T16:00:00Z", "2024-12-04T15:59:59Z", 'set')
     # syncFuelData("vn", "30055562", "2024-12-24T17:00:00Z", "2024-12-25T16:59:59Z")
     # getDailyReportAllCustomer("vn", 7220, "2024-12-12T17:00:00Z", "2024-12-13T16:59:59Z", 'set') # imid=14131
@@ -1431,7 +1431,7 @@ if __name__ == "__main__":
     # 9793        9793  40003465       -1.0           -1     578  miss1  ...      NaN 2025-02-11 14:29:47 2025-02-13 07:20:01    169.0       176.0    345.0
     # getDailyReport("local", "578", "40003465", "2025-02-10T16:00:00Z", "2025-02-13T15:59:59Z", "set")
     # getDailyReport("my", "578", "40003465", "2025-02-10T16:00:00Z", "2025-02-13T15:59:59Z", "set")
-    data = callFuelDataHub("th-stage2", "3715", "50006065", "2025-01-05T00:00:00Z", "2025-04-25T23:59:59Z", "MY09-9O-VN9R-FS04")
+    #data = callFuelDataHub("th-stage2", "3715", "50006065", "2025-01-05T00:00:00Z", "2025-04-25T23:59:59Z", "MY09-9O-VN9R-FS04")
 
    #print(getDailyReport("my-stage2", "517", "40003070", "2025-05-05T17:00:00Z", "2025-06-05T16:59:59Z", "get"))
     # data = callFuelDataHub("local", "8867", "30018551", "2025-02-19T00:00:00Z", "2025-02-20T23:59:59Z", "MY09-9O-VN9R")
