@@ -53,6 +53,7 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                             fueleventlist = []
                     
                     #print(f"加油事件數量: {len(fueleventlist)}")
+
                     # 處理每個加油事件
                     for event in fueleventlist:
                         # 轉換欄位名稱為小寫
@@ -83,7 +84,6 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                         orig_start_time = start_time + timedelta(hours = 1)  
                         if event['starttime'].tzinfo is not None and orig_start_time.tzinfo is None:
                             orig_start_time = orig_start_time.replace(tzinfo=event['starttime'].tzinfo)
-                            
                         if amount >= 10 and end_fuel > start_fuel and event['starttime'] >= orig_start_time:
                             #print("符合條件，加入事件")
                             all_refuel_events.append(event)
@@ -166,13 +166,13 @@ def process_daily_refuel_multi(
 #process_daily_refuel_multi(
 #    vehicles=[
 #          {
-#            "unicode": "40009086",
-#            "cust_id": "1423",
+#            "unicode": "40006979",
+#            "cust_id": "522",
 #            "country": "my"
 #            }
 #    ],
-#    st=datetime(2025, 6, 15),
-#    et=datetime(2025, 6, 17)
+#    st=datetime(2025, 6, 10),
+#    et=datetime(2025, 6, 18)
 #)
 
 #process_daily_refuel_multi(
