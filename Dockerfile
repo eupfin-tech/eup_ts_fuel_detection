@@ -11,7 +11,7 @@ COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 預設執行主程式
-CMD ["python", "fuel_detection/event_comparator.py"]
+CMD ["python", "event_comparator.py"]
 
 
 
