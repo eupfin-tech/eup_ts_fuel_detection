@@ -1,12 +1,16 @@
 from fuel_setting import getDailyReport
 import pandas as pd 
 import json
-from datetime import timedelta, datetime, date
+from datetime import timedelta, datetime
 
 def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
     """處理 getDailyReport 中的加油事件"""
     all_refuel_events = []
     all_daily_reports = []
+    
+    # 確保 cust_id 和 unicode 是字串格式並移除 .0 後綴
+    cust_id = str(cust_id).replace('.0', '')
+    unicode = str(unicode).replace('.0', '')
     
     #fueleventlist 會隱含有凌晨的加油事件，所以需要減去30分鐘(提前搜索)
     start_time = start_time - timedelta(hours = 1) 
@@ -68,7 +72,11 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                         for tcol in ['starttime', 'endtime']:
                             if tcol in event and pd.notnull(event[tcol]):
                                 try:
-                                    event[tcol] = pd.to_datetime(event[tcol]) + pd.Timedelta(hours=8)
+                                    dt = pd.to_datetime(event[tcol])
+                                    if country.lower() == 'vn':
+                                        event[tcol] = dt + pd.Timedelta(hours=7)
+                                    else:
+                                        event[tcol] = dt + pd.Timedelta(hours=8)
                                 except:
                                     event[tcol] = pd.NaT
                         
@@ -84,15 +92,22 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                         orig_start_time = start_time + timedelta(hours = 1)  
                         if event['starttime'].tzinfo is not None and orig_start_time.tzinfo is None:
                             orig_start_time = orig_start_time.replace(tzinfo=event['starttime'].tzinfo)
-                        if amount >= 10 and end_fuel > start_fuel and event['starttime'] >= orig_start_time:
+                            
+                        if event['endtime'].tzinfo is not None and end_time.tzinfo is None:
+                            end_time = end_time.replace(tzinfo=event['endtime'].tzinfo)
+                            
+                        if amount >= 10 and end_fuel > start_fuel and event['starttime'] >= orig_start_time and event['endtime'] <= end_time:
                             #print("符合條件，加入事件")
                             all_refuel_events.append(event)
                         else:
                             #print("不符合條件，跳過事件")
                             pass
+            # 如果有數據但沒有加油事件，顯示信息
+            if not any(r.get('refillCount', 0) > 0 for r in daily_report):
+                print(f"車輛 {unicode} 有數據但沒有加油事件")
         else:
             print("getDailyReport API 呼叫成功但沒有返回數據")
-            
+            print(f"車輛 {unicode} 有數據但沒有加油事件")
         return all_daily_reports, all_refuel_events
     except Exception as e:
         print(f"處理 getDailyReport 時發生錯誤: {e}")
@@ -123,6 +138,10 @@ def process_daily_refuel_multi(
             print(f"\n限制處理車輛數量: {limit}")
     elif csv_path:
         df = pd.read_csv(csv_path)
+        # 確保 unicode 欄位為字串格式，並移除 .0 後綴
+        df['unicode'] = df['unicode'].astype(str).str.replace('.0', '')
+        # 確保 cust_id 欄位為字串格式，並移除 .0 後綴
+        df['cust_id'] = df['cust_id'].astype(str).str.replace('.0', '')
         required_columns = ['cust_id', 'unicode']
         if not all(col in df.columns for col in required_columns):
             print(f"錯誤：CSV 檔案必須包含以下欄位：{required_columns}")   
@@ -131,6 +150,9 @@ def process_daily_refuel_multi(
             df = df.head(limit)
             print(f"\n限制處理車輛數量: {limit}")
         vehicles = df.to_dict(orient='records')
+        # 為每個車輛添加 country 欄位
+        for v in vehicles:
+            v['country'] = country
     else:
         print("請提供 vehicles 或 csv_path")
         return None, pd.DataFrame()
@@ -139,9 +161,13 @@ def process_daily_refuel_multi(
     total_vehicles = len(vehicles)
     for index, v in enumerate(vehicles):
         print(f"\n處理進度: {index + 1}/{total_vehicles}")
-        cust_id = str(v['cust_id'])
-        unicode = str(v['unicode'])
-        car_country = country if country is not None else v.get('country', None)
+        cust_id = str(v['cust_id']).replace('.0', '')  # 確保移除 .0 後綴
+        unicode = str(v['unicode']).replace('.0', '')  # 確保移除 .0 後綴
+        car_country = v.get('country', country)  # 優先使用車輛的 country，否則使用函數參數
+        if car_country is None:
+            print(f"警告：車輛 {unicode} 沒有指定 country，跳過")
+            java_no_data_list.append(unicode)
+            continue
         reports, events = getdaily_refuel_events(car_country, cust_id, unicode, st, et)
         all_daily_reports.extend(reports)
         all_refuel_events.extend(events)
@@ -151,7 +177,7 @@ def process_daily_refuel_multi(
     # 3. 輸出 DataFrame
     if all_refuel_events:
         df_events = pd.DataFrame(all_refuel_events)
-        df_events['unicode'] = df_events['unicode'].astype(str)
+        df_events['unicode'] = df_events['unicode'].astype(str).str.replace('.0', '')
         columns_to_show = ['unicode', 'cust_id', 'starttime', 'endtime', 'gis_x', 'gis_y', 'startfuellevel', 'endfuellevel', 'amount']
         df_events = df_events.reindex(columns=columns_to_show)
         for col in ['starttime', 'endtime']:
@@ -166,19 +192,19 @@ def process_daily_refuel_multi(
 #process_daily_refuel_multi(
 #    vehicles=[
 #          {
-#            "unicode": "40006979",
-#            "cust_id": "522",
-#            "country": "my"
+#            "unicode": "30001437",
+#            "cust_id": "8709",
+#            "country": "vn"
 #            }
 #    ],
-#    st=datetime(2025, 6, 10),
-#    et=datetime(2025, 6, 18)
+#    st=datetime(2025, 4, 1),
+#    et=datetime(2025, 6, 15)
 #)
 
 #process_daily_refuel_multi(
-#    csv_path=r"C:\\work\\MY\\MY_ALL_Unicode.csv",
-#    country="my",
-#    st=datetime(2025, 5, 1),
-#    et=datetime(2025, 5, 15),
-#    limit=5
+#    csv_path=r"C:\work\eup_fuel_detection\VN_ALL_Unicode.csv",
+#    country="vn",
+#    st=datetime(2025, 6, 18),
+#    et=datetime(2025, 6, 19),
+#    limit=50
 #)

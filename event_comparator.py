@@ -7,18 +7,21 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 import os
+from io import StringIO
 
-def send_report_email(sender_email, sender_password, recipient_email, st, et, matched_all_df, only_python_all_df, only_java_all_df):
+def send_report_email(sender_email, sender_password, recipient_email, st, et, matched_all_df, only_python_all_df, only_java_all_df, country=""):
 
     # 建立郵件 
     msg = MIMEMultipart() 
-    msg['Subject'] = f'加油事件比對報告 ({st} 到 {et})'
+    country_display = country.upper() if country else ""
+    msg['Subject'] = f'加油事件比對報告 - {country_display} ({st} 到 {et})'
     msg['From'] = sender_email
     msg['To'] = recipient_email
     
     # 郵件內容
     body = f"""
     Python 和 Java 演算法加油事件比對報告
+    國家: {country_display}
     時間範圍: {st} 到 {et}
     
     比對結果:
@@ -30,13 +33,18 @@ def send_report_email(sender_email, sender_password, recipient_email, st, et, ma
     """
     msg.attach(MIMEText(body, 'plain'))
     
-    # 附加 CSV 檔案
-    for filename in ['matched_events.csv', 'only_in_python.csv', 'only_in_java.csv']:
-        if os.path.exists(filename):
-            with open(filename, 'rb') as f:
-                part = MIMEApplication(f.read(), Name=filename)
-                part['Content-Disposition'] = f'attachment; filename="{filename}"'
-                msg.attach(part)
+    # 直接從 DataFrame 產生 CSV 附件
+    for df, filename in [
+        (matched_all_df, f'matched_events_{country}.csv'),
+        (only_python_all_df, f'only_in_python_{country}.csv'),
+        (only_java_all_df, f'only_in_java_{country}.csv')
+    ]:
+        if not df.empty:
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+            part = MIMEApplication(csv_buffer.getvalue().encode('utf-8-sig'), Name=filename)
+            part['Content-Disposition'] = f'attachment; filename=\"{filename}\"'
+            msg.attach(part)
     
     # 寄出郵件
     try:
@@ -137,12 +145,12 @@ def compare_refuel_events(csv_path, country="my", st=None, et=None, limit=None, 
             py_time = py_row['starttime']
             py_amount = float(py_row['amount'])
             
-            # 檢查時間差異是否在 ±30 分鐘內
-            time_diff = abs((py_time - java_time).total_seconds() / 60)
+            # 檢查時間差異是否在 ±45 分鐘內
+            time_diff = abs((py_time - java_time).total_seconds() / 90)
             # 檢查加油量差異是否在 ±10 公升內
-            amount_diff = abs(py_amount - java_amount)
+            #amount_diff = abs(py_amount - java_amount)
             
-            if time_diff <= 30 and amount_diff <= 10:
+            if time_diff <= 45 :
                 matched_events.append({
                     'unicode': car,
                     'cust_id': java_row['cust_id'],
@@ -182,12 +190,12 @@ def compare_refuel_events(csv_path, country="my", st=None, et=None, limit=None, 
     print(f"Java 遺漏: {len(only_python_df)} 筆")
     
     # 輸出詳細結果到 CSV
-    if not matched_df.empty:
-        matched_df.to_csv("matched_events_before.csv", index=False, encoding='utf-8-sig')
-    if not only_python_df.empty:
-        only_python_df.to_csv("only_in_python_before.csv", index=False, encoding='utf-8-sig')
-    if not only_java_df.empty:
-        only_java_df.to_csv("only_in_java_before.csv", index=False, encoding='utf-8-sig')
+    #if not matched_df.empty:
+    #    matched_df.to_csv("matched_events_before.csv", index=False, encoding='utf-8-sig')
+    #if not only_python_df.empty:
+    #    only_python_df.to_csv("only_in_python_before.csv", index=False, encoding='utf-8-sig')
+    #if not only_java_df.empty:
+    #    only_java_df.to_csv("only_in_java_before.csv", index=False, encoding='utf-8-sig')
     
     # 補跑
     matched2, only_python2, only_java2, python_no_data2, java_no_data2, python_error_vehicles2 = run_again(
@@ -217,12 +225,12 @@ def compare_refuel_events(csv_path, country="my", st=None, et=None, limit=None, 
     print(f"Java 遺漏: {len(only_python_all)} 筆")
 
     # 輸出合併後的 CSV
-    if not matched_all.empty:
-        matched_all.to_csv("matched_events.csv", index=False, encoding='utf-8-sig')
-    if not only_python_all.empty:
-        only_python_all.to_csv("only_in_python.csv", index=False, encoding='utf-8-sig')
-    if not only_java_all.empty:
-        only_java_all.to_csv("only_in_java.csv", index=False, encoding='utf-8-sig')
+    #if not matched_all.empty:
+    #    matched_all.to_csv("matched_events.csv", index=False, encoding='utf-8-sig')
+    #if not only_python_all.empty:
+    #    only_python_all.to_csv("only_in_python.csv", index=False, encoding='utf-8-sig')
+    #if not only_java_all.empty:
+    #    only_java_all.to_csv("only_in_java.csv", index=False, encoding='utf-8-sig')
 
     # 寄信
     if send_email and email_config:
@@ -234,7 +242,8 @@ def compare_refuel_events(csv_path, country="my", st=None, et=None, limit=None, 
             et=et,
             matched_all_df=matched_all,
             only_python_all_df=only_python_all,
-            only_java_all_df=only_java_all
+            only_java_all_df=only_java_all,
+            country=country
         )
 
     return matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles
@@ -276,12 +285,17 @@ def run_again(
 
     # 2. 從 csv 取得車輛 cust_id
     vehicles_df = pd.read_csv(csv_path)
+    # 確保 unicode 欄位為字串格式
+    vehicles_df['unicode'] = vehicles_df['unicode'].astype(str).str.replace('.0', '')
+    # 確保 cust_id 欄位為字串格式，並移除 .0 後綴
+    vehicles_df['cust_id'] = vehicles_df['cust_id'].astype(str).str.replace('.0', '')
     vehicles = []
     for _, row in vehicles_df.iterrows():
         if str(row['unicode']) in retry_unicodes:
             vehicles.append({
                 "unicode": str(row["unicode"]),
                 "cust_id": str(row["cust_id"]),
+                "country": country  # 添加 country 欄位
             })
     if limit:
         vehicles = vehicles[:limit]
@@ -309,10 +323,31 @@ def run_again(
         python_results['starttime'] = pd.to_datetime(python_results['starttime'], errors='coerce')
         python_results['endtime'] = pd.to_datetime(python_results['endtime'], errors='coerce')
         python_results['amount'] = pd.to_numeric(python_results['amount'], errors='coerce')
+        
+        # 過濾掉原本已經存在的事件
+        if not only_python_df.empty:
+            python_results = python_results.merge(
+                only_python_df[['unicode', 'starttime', 'amount']], 
+                on=['unicode', 'starttime', 'amount'], 
+                how='left', 
+                indicator=True
+            )
+            python_results = python_results[python_results['_merge'] == 'left_only'].drop('_merge', axis=1)
+            
     if not java_results.empty:
         java_results['starttime'] = pd.to_datetime(java_results['starttime'], errors='coerce')
         java_results['endtime'] = pd.to_datetime(java_results['endtime'], errors='coerce')
         java_results['amount'] = pd.to_numeric(java_results['amount'], errors='coerce')
+        
+        # 過濾掉原本已經存在的事件
+        if not only_java_df.empty:
+            java_results = java_results.merge(
+                only_java_df[['unicode', 'starttime', 'amount']], 
+                on=['unicode', 'starttime', 'amount'], 
+                how='left', 
+                indicator=True
+            )
+            java_results = java_results[java_results['_merge'] == 'left_only'].drop('_merge', axis=1)
 
     # 4. 比對結果
     matched_events = []
@@ -392,10 +427,51 @@ def run_again(
 if __name__ == "__main__":
     # 郵件設定
     email_config = {
-        'sender_email': os.getenv('GMAIL_SENDER'),
-        'sender_password': os.getenv('GMAIL_APP_PASSWORD'),
-        'recipient_email': os.getenv('GMAIL_RECEIVER')
+        'sender_email': 'ken-liao@eup.com.tw',
+        'sender_password': 'omnb snfb mqtx dmug',
+        'recipient_email': 'ken-liao@eup.com.tw'
     }
+    
+    st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    et = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
+    
+    # 處理多個國家
+    countries = [
+        {"country": "my", "csv_path": r"C:\work\eup_fuel_detection\MY_ALL_Unicode.csv"},
+        {"country": "vn", "csv_path": r"C:\work\eup_fuel_detection\VN_ALL_Unicode.csv"}
+    ]
+    
+    for country_config in countries:
+        country = country_config["country"]
+        csv_path = country_config["csv_path"]
+        
+        print(f"\n{'='*50}")
+        print(f"開始處理 {country.upper()} 國家")
+        print(f"{'='*50}")
+        
+        try:
+            matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles = compare_refuel_events(
+                csv_path=csv_path,
+                country=country,
+                st=st,
+                et=et,
+                limit=50,
+                send_email=True,
+                email_config=email_config
+            )
+            
+            print(f"\n{country.upper()} 處理完成")
+            print(f"成功配對: {len(matched_all)} 筆")
+            print(f"Python 遺漏: {len(only_java_all)} 筆")
+            print(f"Java 遺漏: {len(only_python_all)} 筆")
+            
+        except Exception as e:
+            print(f"處理 {country.upper()} 時發生錯誤: {str(e)}")
+            continue
+    
+    print(f"\n{'='*50}")
+    print("所有國家處理完成")
+    print(f"{'='*50}")
     
     # 比對指定日期範圍的加油事件
     #matched_all 補跑後matched的結果
@@ -405,16 +481,3 @@ if __name__ == "__main__":
     #python_no_data_all 補跑後python往前推到最久還是沒資料
     #java_no_data_all 補跑後的 Java 還是沒抓到加油事件資料
     #python_error_vehicles 補跑後的 Python 處理時還是發生錯誤的車輛
-    
-    
-    st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    et = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
-    matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles = compare_refuel_events(
-        st=st,
-        et=et,
-        csv_path=r"C:\work\eup_fuel_detection\fuel_detection\MY_ALL_Unicode.csv",
-        country="my",
-        limit= None,
-        send_email=True,
-        email_config=email_config
-    ) 

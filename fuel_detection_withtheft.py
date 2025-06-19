@@ -65,8 +65,10 @@ class FuelEventDetector:
         self.fuel_df['instant_fuel'] = pd.to_numeric(self.fuel_df['instant_fuel'], errors='coerce')
         self.fuel_df = self.fuel_df[self.fuel_df['instant_fuel'].notnull()]
         if self.fuel_df.empty:
-            # 這裡直接 raise 或 return，讓主流程記錄到 no_data
-            raise ValueError("No valid instant_fuel data")
+            # 設置標記表示沒有有效數據
+            self.has_valid_data = False
+            return
+        self.has_valid_data = True
         self.fuel_df['fuel_liters'] = self.voltage_to_fuel(self.fuel_df['instant_fuel'])
         
         # 分析數據特徵
@@ -118,7 +120,7 @@ class FuelEventDetector:
             return 'medium'
         else:
             return 'low'
-
+ 
     
     def _calculate_adaptive_parameters(self, base_params=None):
         """根據數據特徵計算自適應參數"""
@@ -573,11 +575,16 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
     if csv_path:
         # 從CSV讀取車輛列表
         vehicles_df = pd.read_csv(csv_path)
+        # 確保 unicode 欄位為字串格式，並移除 .0 後綴
+        vehicles_df['unicode'] = vehicles_df['unicode'].astype(str).str.replace('.0', '')
+        # 確保 cust_id 欄位為字串格式，並移除 .0 後綴
+        vehicles_df['cust_id'] = vehicles_df['cust_id'].astype(str).str.replace('.0', '')
         vehicles = []
         for _, row in vehicles_df.iterrows():
             vehicles.append({
                 "unicode": str(row["unicode"]),
-                "cust_id": str(row["cust_id"]),     
+                "cust_id": str(row["cust_id"]),
+                "country": country  # 添加 country 欄位
             })
     elif not vehicles:
         raise ValueError("必須提供vehicles或csv_path其中一個參數")
@@ -604,7 +611,7 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
         
         try:
             # 自動判斷 fuel_sensor_type
-            model_data = fetch_fuel_calibration(unicode)
+            model_data = fetch_fuel_calibration(unicode, country)
             if not model_data or (isinstance(model_data, pd.DataFrame) and model_data.empty):
                 print(f"警告：{unicode} 沒有校正表資料，跳過")
                 continue
@@ -663,6 +670,10 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
             
             # 3. 使用校準期間資料建立偵測器並計算自適應參數(calibration_df)
             calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
+            if not hasattr(calibration_detector, 'has_valid_data') or not calibration_detector.has_valid_data:
+                print(f"車輛 {unicode} 沒有有效的油量數據，跳過")
+                python_no_data_list.append(unicode)
+                continue
             adaptive_params = calibration_detector._calculate_adaptive_parameters()
             
             # 4. 更新偵測器的資料為目標期間
