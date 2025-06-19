@@ -455,7 +455,7 @@ if __name__ == "__main__":
                 country=country,
                 st=st,
                 et=et,
-                limit=50,
+                limit=None,
                 send_email=True,
                 email_config=email_config
             )
