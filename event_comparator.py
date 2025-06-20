@@ -139,7 +139,7 @@ def compare_refuel_events(csv_path, country="my", st=None, et=None, limit=None, 
             (~python_results.index.isin(used_python_idx))
         ]
         
-        # 檢查時間和加油量是否在允許範圍內
+        # 檢查時間是否在允許範圍內
         matched = False
         for py_idx, py_row in python_candidates.iterrows():
             py_time = py_row['starttime']
@@ -435,42 +435,54 @@ if __name__ == "__main__":
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     et = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
     
-    # 處理多個國家
+    # 根據環境變數決定要處理的國家，預設為 'my'
+    target_country_code = os.getenv('COUNTRY_CODE', 'my').lower()
+
+    # 國家設定
     countries = [
-        {"country": "my", "csv_path": r"C:\work\eup_ts_fuel_detection\MY_ALL_Unicode.csv"},
-        {"country": "vn", "csv_path": r"C:\work\eup_ts_fuel_detection\VN_ALL_Unicode.csv"}
+        {
+            "country": "my",
+            "csv_url": "https://raw.githubusercontent.com/KenLiao-eup/eup_ts_fuel_detection/main/MY_ALL_Unicode.csv"
+        },
+        {
+            "country": "vn",
+            "csv_url": "https://raw.githubusercontent.com/KenLiao-eup/eup_ts_fuel_detection/main/VN_ALL_Unicode.csv"
+        }
     ]
     
-    for country_config in countries:
-        country = country_config["country"]
-        csv_path = country_config["csv_path"]
-        
-        print(f"\n{'='*50}")
-        print(f"開始處理 {country.upper()} 國家")
-        print(f"{'='*50}")
-        
-        try:
-            matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles = compare_refuel_events(
-                csv_path=csv_path,
-                country=country,
-                st=st,
-                et=et,
-                limit=None,
-                send_email=True,
-                email_config=email_config
-            )
-            
-            print(f"\n{country.upper()} 處理完成")
-            print(f"成功配對: {len(matched_all)} 筆")
-            print(f"Python 遺漏: {len(only_java_all)} 筆")
-            print(f"Java 遺漏: {len(only_python_all)} 筆")
-            
-        except Exception as e:
-            print(f"處理 {country.upper()} 時發生錯誤: {str(e)}")
-            continue
+    # 找到目標國家的設定，如果找不到就用第一個 (my)
+    country_config = next((c for c in countries if c['country'] == target_country_code), countries[0])
+
+    country = country_config["country"]
+    csv_url = country_config["csv_url"]
     
     print(f"\n{'='*50}")
-    print("所有國家處理完成")
+    print(f"準備處理國家: {country.upper()} (來自環境變數或預設)")
+    print(f"{'='*50}")
+    
+    try:
+        print(f"從 {csv_url} 讀取資料...")
+        # Note: We are passing the URL to csv_path parameter
+        matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles = compare_refuel_events(
+            csv_path=csv_url,
+            country=country,
+            st=st,
+            et=et,
+            limit=None,
+            send_email=True,
+            email_config=email_config
+        )
+        
+        print(f"\n{country.upper()} 處理完成")
+        print(f"成功配對: {len(matched_all)} 筆")
+        print(f"Python 遺漏: {len(only_java_all)} 筆")
+        print(f"Java 遺漏: {len(only_python_all)} 筆")
+        
+    except Exception as e:
+        print(f"處理 {country.upper()} 時發生錯誤: {str(e)}")
+
+    print(f"\n{'='*50}")
+    print("所有處理已完成")
     print(f"{'='*50}")
     
     # 比對指定日期範圍的加油事件
