@@ -435,6 +435,9 @@ if __name__ == "__main__":
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     et = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
     
+    # 取得腳本所在的目錄，確保路徑的準確性
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    
     # 根據環境變數決定要處理的國家，預設為 'my'
     target_country_code = os.getenv('COUNTRY_CODE', 'my').lower()
 
@@ -442,11 +445,11 @@ if __name__ == "__main__":
     countries = [
         {
             "country": "my",
-            "csv_url": "https://raw.githubusercontent.com/KenLiao-eup/eup_ts_fuel_detection/main/MY_ALL_Unicode.csv"
+            "csv_url": os.path.join(script_dir, "MY_ALL_Unicode.csv")
         },
         {
             "country": "vn",
-            "csv_url": "https://raw.githubusercontent.com/KenLiao-eup/eup_ts_fuel_detection/main/VN_ALL_Unicode.csv"
+            "csv_url": os.path.join(script_dir, "VN_ALL_Unicode.csv")
         }
     ]
     
