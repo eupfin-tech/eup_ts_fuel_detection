@@ -437,8 +437,8 @@ if __name__ == "__main__":
     
     # 處理多個國家
     countries = [
-        {"country": "my", "csv_path": r"C:\work\eup_fuel_detection\MY_ALL_Unicode.csv"},
-        {"country": "vn", "csv_path": r"C:\work\eup_fuel_detection\VN_ALL_Unicode.csv"}
+        {"country": "my", "csv_path": r"C:\work\eup_ts_fuel_detection\MY_ALL_Unicode.csv"},
+        {"country": "vn", "csv_path": r"C:\work\eup_ts_fuel_detection\VN_ALL_Unicode.csv"}
     ]
     
     for country_config in countries:
