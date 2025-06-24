@@ -412,7 +412,7 @@ if __name__ == "__main__":
     matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles = compare_refuel_events(
         st=st,
         et=et,
-        csv_path=r"C:\work\eup_fuel_detection\fuel_detection\MY_ALL_Unicode.csv",
+        csv_path=r"MY_ALL_Unicode.csv",
         country="my",
         limit= None,
         send_email=True,
