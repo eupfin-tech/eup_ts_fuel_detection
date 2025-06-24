@@ -3,10 +3,11 @@ import pandas as pd
 import json
 from datetime import timedelta, datetime
 
-def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
-    """處理 getDailyReport 中的加油事件"""
+def getdaily_fuel_events(country, cust_id, unicode, start_time, end_time):
+    """處理 getDailyReport 中的加油事件和偷油事件"""
     all_refuel_events = []
     all_daily_reports = []
+    all_theft_events = []
     
     # 確保 cust_id 和 unicode 是字串格式並移除 .0 後綴
     cust_id = str(cust_id).replace('.0', '')
@@ -30,7 +31,7 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                     daily_report = json.loads(daily_report)
                 except:
                     print("無法解析 daily_report 字符串")
-                    return [], []
+                    return [], [], []
             
             # 將單個報告轉換為列表
             if not isinstance(daily_report, list):
@@ -98,23 +99,31 @@ def getdaily_refuel_events(country, cust_id, unicode, start_time, end_time):
                             
                         if amount >= 10 and end_fuel > start_fuel and event['starttime'] >= orig_start_time and event['endtime'] <= end_time:
                             #print("符合條件，加入事件")
-                            all_refuel_events.append(event)
-                        else:
-                            #print("不符合條件，跳過事件")
-                            pass
+                            # 為加油事件添加標識
+                            refuel_event = event.copy()
+                            refuel_event['event_type'] = 'refuel'
+                            all_refuel_events.append(refuel_event)
+                            
+                        # 檢測偷油事件：油量下降且時間在範圍內
+                        if amount > 7 and end_fuel < start_fuel and event['starttime'] >= orig_start_time and event['endtime'] <= end_time:
+                            # 為偷油事件添加標識
+                            theft_event = event.copy()
+                            theft_event['event_type'] = 'theft'
+                            all_theft_events.append(theft_event)
+                            
             # 如果有數據但沒有加油事件，顯示信息
             if not any(r.get('refillCount', 0) > 0 for r in daily_report):
                 print(f"車輛 {unicode} 有數據但沒有加油事件")
         else:
             print("getDailyReport API 呼叫成功但沒有返回數據")
             print(f"車輛 {unicode} 有數據但沒有加油事件")
-        return all_daily_reports, all_refuel_events
+        return all_daily_reports, all_refuel_events, all_theft_events
     except Exception as e:
         print(f"處理 getDailyReport 時發生錯誤: {e}")
-        return [], []
+        return [], [], []
 
 
-def process_daily_refuel_multi(
+def process_daily_fuel_events(
     vehicles=None,
     csv_path=None,
     country=None,
@@ -129,6 +138,7 @@ def process_daily_refuel_multi(
     """
     all_daily_reports = []
     all_refuel_events = []
+    all_theft_events = []
     java_no_data_list = []
 
     # 1. 處理車輛清單
@@ -145,7 +155,7 @@ def process_daily_refuel_multi(
         required_columns = ['cust_id', 'unicode']
         if not all(col in df.columns for col in required_columns):
             print(f"錯誤：CSV 檔案必須包含以下欄位：{required_columns}")   
-            return None, pd.DataFrame()
+            return None, pd.DataFrame(), pd.DataFrame()
         if limit is not None:
             df = df.head(limit)
             print(f"\n限制處理車輛數量: {limit}")
@@ -155,7 +165,7 @@ def process_daily_refuel_multi(
             v['country'] = country
     else:
         print("請提供 vehicles 或 csv_path")
-        return None, pd.DataFrame()
+        return None, pd.DataFrame(), pd.DataFrame()
 
     # 2. 處理每一輛車
     total_vehicles = len(vehicles)
@@ -168,40 +178,58 @@ def process_daily_refuel_multi(
             print(f"警告：車輛 {unicode} 沒有指定 country，跳過")
             java_no_data_list.append(unicode)
             continue
-        reports, events = getdaily_refuel_events(car_country, cust_id, unicode, st, et)
+        reports, events, theft_events = getdaily_fuel_events(car_country, cust_id, unicode, st, et)
         all_daily_reports.extend(reports)
         all_refuel_events.extend(events)
-        if not events:
+        all_theft_events.extend(theft_events)
+        if not events and not theft_events:
             java_no_data_list.append(unicode)
 
     # 3. 輸出 DataFrame
+    df_refuel_events = pd.DataFrame()
+    df_theft_events = pd.DataFrame()
+    
     if all_refuel_events:
-        df_events = pd.DataFrame(all_refuel_events)
-        df_events['unicode'] = df_events['unicode'].astype(str).str.replace('.0', '')
-        columns_to_show = ['unicode', 'cust_id', 'starttime', 'endtime', 'gis_x', 'gis_y', 'startfuellevel', 'endfuellevel', 'amount']
-        df_events = df_events.reindex(columns=columns_to_show)
+        df_refuel_events = pd.DataFrame(all_refuel_events)
+        df_refuel_events['unicode'] = df_refuel_events['unicode'].astype(str).str.replace('.0', '')
+        columns_to_show = ['unicode', 'cust_id', 'starttime', 'endtime', 'gis_x', 'gis_y', 'startfuellevel', 'endfuellevel', 'amount', 'event_type']
+        df_refuel_events = df_refuel_events.reindex(columns=columns_to_show)
         for col in ['starttime', 'endtime']:
-            if col in df_events.columns:
-                df_events[col] = pd.to_datetime(df_events[col]).dt.strftime('%Y-%m-%d %H:%M:%S')
-        #df_events.to_csv(r"C:\\work\\eup_fuel_detection\\getdaily_refuel.csv", index=False, encoding='utf-8-sig')
-        return df_events, java_no_data_list
-    else:
-        print("沒有找到加油事件")
-        return pd.DataFrame(), java_no_data_list
+            if col in df_refuel_events.columns:
+                df_refuel_events[col] = pd.to_datetime(df_refuel_events[col]).dt.strftime('%Y-%m-%d %H:%M:%S')
+    
+    if all_theft_events:
+        df_theft_events = pd.DataFrame(all_theft_events)
+        df_theft_events['unicode'] = df_theft_events['unicode'].astype(str).str.replace('.0', '')
+        theft_columns_to_show = ['unicode', 'cust_id', 'starttime', 'endtime', 'gis_x', 'gis_y', 'startfuellevel', 'endfuellevel', 'amount', 'event_type']
+        df_theft_events = df_theft_events.reindex(columns=theft_columns_to_show)
+        for col in ['starttime', 'endtime']:
+            if col in df_theft_events.columns:
+                df_theft_events[col] = pd.to_datetime(df_theft_events[col]).dt.strftime('%Y-%m-%d %H:%M:%S')
 
-#process_daily_refuel_multi(
+    if df_refuel_events.empty and df_theft_events.empty:
+        print("沒有找到加油事件或偷油事件")
+        
+    return df_refuel_events, df_theft_events, java_no_data_list
+
+#TEST
+#if __name__ == "__main__":
+#    df_refuel_events, df_theft_events, java_no_data_list = process_daily_fuel_events(
 #    vehicles=[
 #          {
-#            "unicode": "30001437",
-#            "cust_id": "8709",
-#            "country": "vn"
+#            "unicode": "40000787",
+#            "cust_id": "248",
+#            "country": "my"
 #            }
 #    ],
-#    st=datetime(2025, 4, 1),
+#    st=datetime(2025, 5, 1),
 #    et=datetime(2025, 6, 15)
 #)
+#    print(df_refuel_events)
+#    print(df_theft_events)
+#    print(java_no_data_list)
 
-#process_daily_refuel_multi(
+#process_daily_fuel_events(
 #    csv_path=r"C:\work\eup_fuel_detection\VN_ALL_Unicode.csv",
 #    country="vn",
 #    st=datetime(2025, 6, 18),
