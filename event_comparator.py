@@ -495,21 +495,4 @@ if __name__ == "__main__":
     
     #python_no_data_all 補跑後python往前推到最久還是沒資料
     #java_no_data_all 補跑後的 Java 還是沒抓到加油事件資料
-<<<<<<< HEAD
     #python_error_vehicles 補跑後的 Python 處理時還是發生錯誤的車輛
-    
-    
-    st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    et = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
-    matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles = compare_refuel_events(
-        st=st,
-        et=et,
-        csv_path=r"MY_ALL_Unicode.csv",
-        country="my",
-        limit= None,
-        send_email=True,
-        email_config=email_config
-    ) 
-=======
-    #python_error_vehicles 補跑後的 Python 處理時還是發生錯誤的車輛
->>>>>>> 0fd04335d6674773e1e13167699f117898377047
