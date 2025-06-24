@@ -9,6 +9,75 @@ from email.mime.application import MIMEApplication
 import os
 from io import StringIO
 
+
+def debug_environment():
+    """除錯環境資訊"""
+    print("=" * 50)
+    print("DEBUG: Environment Information")
+    print("=" * 50)
+    print(f"Python version: {sys.version}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Script directory: {os.path.dirname(os.path.realpath(__file__))}")
+    print(f"Environment variables:")
+    for key, value in os.environ.items():
+        if 'COUNTRY' in key or 'PATH' in key:
+            print(f"  {key}: {value}")
+    
+    print("\nFiles in current directory:")
+    try:
+        files = os.listdir('.')
+        for f in files:
+            if f.endswith('.csv') or f.endswith('.py'):
+                print(f"  {f}")
+    except Exception as e:
+        print(f"  Error listing files: {e}")
+    
+    print("=" * 50)
+
+def check_csv_files():
+    """檢查 CSV 檔案是否存在"""
+    print("DEBUG: Checking CSV files...")
+    
+    csv_files = {
+        "my": "MY_ALL_Unicode.csv",
+        "vn": "VN_ALL_Unicode.csv"
+    }
+    
+    for country, filename in csv_files.items():
+        if os.path.exists(filename):
+            try:
+                df = pd.read_csv(filename)
+                print(f"  {filename}: EXISTS ({len(df)} rows)")
+            except Exception as e:
+                print(f"  {filename}: EXISTS but ERROR reading: {e}")
+        else:
+            print(f"  {filename}: NOT FOUND")
+
+def test_database_connection():
+    """測試資料庫連線"""
+    print("DEBUG: Testing database connection...")
+    try:
+        from eup_base import getSqlSession
+        conn = getSqlSession()
+        print("  Database connection: SUCCESS")
+        conn.close()
+    except Exception as e:
+        print(f"  Database connection: FAILED - {e}")
+
+def test_api_connection():
+    """測試 API 連線"""
+    print("DEBUG: Testing API connection...")
+    try:
+        import requests
+        # 測試一個簡單的 API 呼叫
+        response = requests.get("https://httpbin.org/get", timeout=10)
+        if response.status_code == 200:
+            print("  Internet connection: SUCCESS")
+        else:
+            print(f"  Internet connection: FAILED - Status {response.status_code}")
+    except Exception as e:
+        print(f"  Internet connection: FAILED - {e}")
+        
 def send_report_email(sender_email, sender_password, recipient_email, st, et, matched_all_df, only_python_all_df, only_java_all_df, country=""):
 
     # 建立郵件 
@@ -425,6 +494,10 @@ def run_again(
 
 # 使用範例
 if __name__ == "__main__":
+    debug_environment()
+    check_csv_files()
+    test_database_connection()
+    test_api_connection()
     # 郵件設定
     email_config = {
         'sender_email': 'ken-liao@eup.com.tw',
