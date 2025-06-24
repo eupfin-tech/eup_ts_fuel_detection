@@ -7,9 +7,9 @@ from db_get import get_all_vehicles
 from send_email import send_report_email
 
 
-def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=None, send_email=False, email_config=None):
+def compare_fuel_events(vehicles=None, country="my", st=None, et=None, limit=None, send_email=False, email_config=None):
     """
-    比對 Python 和 Java 的加油事件偵測結果
+    比對 Python 和 Java 的加油和偷油事件偵測結果
     
     Parameters:
     -----------
@@ -23,7 +23,8 @@ def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=N
     
     Returns:
     --------
-    tuple: (matched_events, only_in_python, only_in_java, python_no_data_list, java_no_data_list, python_error_vehicles)
+    tuple: (matched_events, only_in_python, only_in_java, python_no_data_list, java_no_data_list, python_error_vehicles, 
+            matched_theft_events, only_in_python_theft, only_in_java_theft)
     """
     # 轉換日期為 datetime
     st = datetime.strptime(st, "%Y-%m-%d")
@@ -36,7 +37,7 @@ def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=N
         
         if not vehicles_data:
             print(f"警告: 沒有找到 {country.upper()} 的車輛資料")
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), [], [], []
+            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), [], [], [], pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
         
         # 轉換為需要的格式
         vehicles = []
@@ -51,7 +52,7 @@ def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=N
     if limit:
         vehicles = vehicles[:limit]
     
-    # 1. 取得 Python 偵測結果
+    # 1. 取得 Python 和 Java 偵測結果
     print("\n取得 Python 偵測結果...")
     python_refuel_results, python_theft_results, python_no_data_list, python_error_vehicles = detect_fuel_events_for_range(
         vehicles=vehicles,
@@ -61,7 +62,6 @@ def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=N
         limit=limit
     )
     
-    # 2. 取得 Java 偵測結果
     print("\n取得 Java 偵測結果...")
     java_refuel_results, java_theft_results, java_no_data_list = process_daily_fuel_events(
         vehicles=vehicles,
@@ -76,118 +76,162 @@ def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=N
     print("Python 處理時發生錯誤的車輛：", python_error_vehicles)
     print("Java getDailyReport API 呼叫成功但沒有返回數據的車輛：", java_no_data_list)
     
-    # 3. 確保時間欄位格式一致
-    if not python_refuel_results.empty:
-        python_refuel_results['starttime'] = pd.to_datetime(python_refuel_results['starttime'], errors='coerce')
-        python_refuel_results['endtime'] = pd.to_datetime(python_refuel_results['endtime'], errors='coerce')
-        python_refuel_results['amount'] = pd.to_numeric(python_refuel_results['amount'], errors='coerce')
-    if not java_refuel_results.empty:
-        java_refuel_results['starttime'] = pd.to_datetime(java_refuel_results['starttime'], errors='coerce')
-        java_refuel_results['endtime'] = pd.to_datetime(java_refuel_results['endtime'], errors='coerce')
-        java_refuel_results['amount'] = pd.to_numeric(java_refuel_results['amount'], errors='coerce')
+    # 2. 統一處理時間欄位格式
+    def standardize_datetime_columns(df):
+        """統一處理 DataFrame 的時間和數值欄位格式"""
+        if not df.empty:
+            df['starttime'] = pd.to_datetime(df['starttime'], errors='coerce')
+            df['endtime'] = pd.to_datetime(df['endtime'], errors='coerce')
+            df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+        return df
     
-    # 4. 比對結果
-    matched_events = []
-    only_in_python = []
-    only_in_java = []
-    used_python_idx = set()
-
-    # 如果任一結果為空，直接返回
-    if python_refuel_results.empty or java_refuel_results.empty:
-        if python_refuel_results.empty and not java_refuel_results.empty:
-            only_in_java = java_refuel_results.to_dict('records')
-        elif not python_refuel_results.empty and java_refuel_results.empty:
-            only_in_python = python_refuel_results.to_dict('records')
-        return pd.DataFrame(matched_events), pd.DataFrame(only_in_python), pd.DataFrame(only_in_java), python_no_data_list, java_no_data_list, python_error_vehicles
-
-    # 比對每個 Java 事件
-    for _, java_row in java_refuel_results.iterrows():
-        car = (java_row['unicode'])
-        java_time = java_row['starttime']
-        java_amount = float(java_row['amount'])
-        python_candidates = python_refuel_results[
-            (python_refuel_results['unicode'] == car) &
-            (~python_refuel_results.index.isin(used_python_idx))
-        ]
-        matched = False
-        for py_idx, py_row in python_candidates.iterrows():
-            py_time = py_row['starttime']
-            py_amount = float(py_row['amount'])
+    python_refuel_results = standardize_datetime_columns(python_refuel_results)
+    java_refuel_results = standardize_datetime_columns(java_refuel_results)
+    python_theft_results = standardize_datetime_columns(python_theft_results)
+    java_theft_results = standardize_datetime_columns(java_theft_results)
+    
+    # 3. 統一的比對邏輯函數
+    def compare_events(python_results, java_results, event_type="事件"):
+        """
+        統一的比對邏輯，適用於加油和偷油事件
+        
+        Parameters:
+        -----------
+        python_results: DataFrame, Python 偵測結果
+        java_results: DataFrame, Java 偵測結果
+        event_type: str, 事件類型名稱（用於日誌）
+        
+        Returns:
+        --------
+        tuple: (matched_events, only_in_python, only_in_java)
+        """
+        matched_events = []
+        only_in_python = []
+        only_in_java = []
+        used_python_idx = set()
+        
+        # 如果任一結果為空，處理邊界情況
+        if python_results.empty or java_results.empty:
+            if python_results.empty and not java_results.empty:
+                only_in_java = java_results.to_dict('records')
+            elif not python_results.empty and java_results.empty:
+                only_in_python = python_results.to_dict('records')
+            return matched_events, only_in_python, only_in_java
+        
+        # 比對每個 Java 事件
+        for _, java_row in java_results.iterrows():
+            car = java_row['unicode']
+            java_time = java_row['starttime']
+            java_amount = float(java_row['amount'])
             
-            time_diff = abs((py_time - java_time).total_seconds() / 60)
-            # 檢查加油量差異是否在 ±10 公升內
-            #amount_diff = abs(py_amount - java_amount)
+            # 找出對應車輛的 Python 候選事件
+            python_candidates = python_results[
+                (python_results['unicode'] == car) &
+                (~python_results.index.isin(used_python_idx))
+            ]
             
-            if time_diff <= 45:
-                matched_events.append({
-                    'unicode': car,
-                    'cust_id': java_row['cust_id'],
-                    'java_starttime': java_row['starttime'],
-                    'java_endtime': java_row['endtime'],
-                    'java_startfuellevel': java_row['startfuellevel'],
-                    'java_endfuellevel': java_row['endfuellevel'],
-                    'java_amount': java_amount,
-                    'python_starttime': py_row['starttime'],
-                    'python_endtime': py_row['endtime'],
-                    'python_startfuellevel': py_row['startfuellevel'],
-                    'python_endfuellevel': py_row['endfuellevel'],
-                    'python_amount': py_amount
-                })
-                used_python_idx.add(py_idx)
-                matched = True
-                break
-        if not matched:
-            only_in_java.append({k: str(v) for k, v in java_row.to_dict().items()})
+            matched = False
+            for py_idx, py_row in python_candidates.iterrows():
+                py_time = py_row['starttime']
+                py_amount = float(py_row['amount'])
+                
+                time_diff = abs((py_time - java_time).total_seconds() / 60)
+                
+                if time_diff <= 45:  # 45分鐘內的事件視為同一事件
+                    matched_events.append({
+                        'unicode': car,
+                        'cust_id': java_row['cust_id'],
+                        'java_starttime': java_row['starttime'],
+                        'java_endtime': java_row['endtime'],
+                        'java_startfuellevel': java_row['startfuellevel'],
+                        'java_endfuellevel': java_row['endfuellevel'],
+                        'java_amount': java_amount,
+                        'python_starttime': py_row['starttime'],
+                        'python_endtime': py_row['endtime'],
+                        'python_startfuellevel': py_row['startfuellevel'],
+                        'python_endfuellevel': py_row['endfuellevel'],
+                        'python_amount': py_amount
+                    })
+                    used_python_idx.add(py_idx)
+                    matched = True
+                    break
+            
+            if not matched:
+                only_in_java.append({k: str(v) for k, v in java_row.to_dict().items()})
+        
+        # 找出只在 Python 中出現的事件
+        for idx, row in python_results.iterrows():
+            if idx not in used_python_idx:
+                only_in_python.append({k: str(v) for k, v in row.to_dict().items()})
+        
+        return matched_events, only_in_python, only_in_java
     
-    # 找出只在 Python 中出現的事件
-    for idx, row in python_refuel_results.iterrows():
-        if idx not in used_python_idx:
-            only_in_python.append({k: str(v) for k, v in row.to_dict().items()})
-
-    # 轉換為 DataFrame
-    matched_df = pd.DataFrame(matched_events)
-    only_in_python_df = pd.DataFrame(only_in_python)
-    only_in_java_df = pd.DataFrame(only_in_java)
+    # 4. 執行比對
+    print(f"\n{'='*50}")
+    print(f"開始比對 {country.upper()} 的加油和偷油事件")
+    print(f"{'='*50}")
     
-    # 輸出報告
-    print("\n=== 比對結果報告 ===")
-    print(f"時間範圍: {st} 到 {et}")
-    print(f"成功配對: {len(matched_df)} 筆")
-    print(f"Python 遺漏: {len(only_in_java_df)} 筆")
-    print(f"Java 遺漏: {len(only_in_python_df)} 筆")
+    # 比對加油事件
+    print("\n1. 比對加油事件...")
+    matched_refuel_events, only_in_python_refuel, only_in_java_refuel = compare_events(
+        python_refuel_results, java_refuel_results, "加油事件"
+    )
     
-    # 輸出詳細結果到 CSV
-    #if not matched_df.empty:
-    #    matched_df.to_csv("matched_events_before.csv", index=False, encoding='utf-8-sig')
-    #if not only_python_df.empty:
-    #    only_python_df.to_csv("only_in_python_before.csv", index=False, encoding='utf-8-sig')
-    #if not only_java_df.empty:
-    #    only_java_df.to_csv("only_in_java_before.csv", index=False, encoding='utf-8-sig')
+    # 比對偷油事件
+    print("\n2. 比對偷油事件...")
+    matched_theft_events, only_in_python_theft, only_in_java_theft = compare_events(
+        python_theft_results, java_theft_results, "偷油事件"
+    )
     
-    # 補跑
+    # 5. 轉換為 DataFrame
+    matched_refuel_df = pd.DataFrame(matched_refuel_events)
+    only_in_python_refuel_df = pd.DataFrame(only_in_python_refuel)
+    only_in_java_refuel_df = pd.DataFrame(only_in_java_refuel)
+    
+    matched_theft_df = pd.DataFrame(matched_theft_events)
+    only_in_python_theft_df = pd.DataFrame(only_in_python_theft)
+    only_in_java_theft_df = pd.DataFrame(only_in_java_theft)
+    
+    # 6. 輸出初步比對報告
+    def print_comparison_report(matched_df, only_python_df, only_java_df, event_type, st, et):
+        """統一的報告輸出函數"""
+        print(f"\n=== {event_type}比對結果報告 ===")
+        print(f"時間範圍: {st} 到 {et}")
+        print(f"成功配對: {len(matched_df)} 筆")
+        print(f"Python 遺漏: {len(only_java_df)} 筆")
+        print(f"Java 遺漏: {len(only_python_df)} 筆")
+    
+    print_comparison_report(matched_refuel_df, only_in_python_refuel_df, only_in_java_refuel_df, "加油事件", st, et)
+    print_comparison_report(matched_theft_df, only_in_python_theft_df, only_in_java_theft_df, "偷油事件", st, et)
+    
+    # 7. 補跑機制（只針對加油事件）
+    print("\n3. 執行加油事件補跑機制...")
     matched2, only_in_python_df2, only_in_java_df2, python_no_data_list2, java_no_data_list2, python_error_vehicles2 = run_again(
         vehicles=vehicles,
         country=country,
         st=st,
         et=et,
-        only_in_python_df=only_in_python_df,
-        only_in_java_df=only_in_java_df,
+        only_in_python_df=only_in_python_refuel_df,
+        only_in_java_df=only_in_java_refuel_df,
         java_no_data_unicodes=java_no_data_list,
         python_error_vehicles=python_error_vehicles,
         limit=limit
     )
     
-    # 合併
-    matched_all = pd.concat([matched_df, matched2], ignore_index=True)
+    # 8. 合併加油事件結果
+    matched_all = pd.concat([matched_refuel_df, matched2], ignore_index=True)
     # 強制所有欄位型別一致再去重
     for col in matched_all.columns:
         matched_all[col] = matched_all[col].astype(str)
     matched_all.drop_duplicates(inplace=True)
     
-    only_python_all = pd.concat([only_in_python_df, only_in_python_df2], ignore_index=True)
-    only_java_all = pd.concat([only_in_java_df, only_in_java_df2], ignore_index=True)
+    only_python_all = pd.concat([only_in_python_refuel_df, only_in_python_df2], ignore_index=True)
+    only_java_all = pd.concat([only_in_java_refuel_df, only_in_java_df2], ignore_index=True)
+    
+    # 9. 合併無資料和錯誤車輛清單
     python_no_data_all = list(set(python_no_data_list + python_no_data_list2))
     java_no_data_all = list(set(java_no_data_list + java_no_data_list2))
+    
     # 修正 python_error_vehicles 的合併邏輯，確保能處理 numpy.ndarray
     python_error_vehicles_all = []
     if python_error_vehicles:
@@ -196,22 +240,19 @@ def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=N
         python_error_vehicles_all.extend([str(v) for v in python_error_vehicles2])
     python_error_vehicles = list(set(python_error_vehicles_all))
 
-    # 輸出合併後的報告
-    print("\n=== 合併後比對結果報告 ===")
-    print(f"時間範圍: {st} 到 {et}")
-    print(f"成功配對: {len(matched_all)} 筆")
-    print(f"Python 遺漏: {len(only_java_all)} 筆")
-    print(f"Java 遺漏: {len(only_python_all)} 筆")
+    # 10. 輸出最終報告
+    print(f"\n{'='*50}")
+    print(f"{country.upper()} 最終比對結果")
+    print(f"{'='*50}")
+    print_comparison_report(matched_all, only_python_all, only_java_all, "加油事件（含補跑）", st, et)
+    print_comparison_report(matched_theft_df, only_in_python_theft_df, only_in_java_theft_df, "偷油事件", st, et)
+    
+    print(f"\n無資料車輛統計:")
+    print(f"Python 無資料車輛: {len(python_no_data_all)} 輛")
+    print(f"Java 無資料車輛: {len(java_no_data_all)} 輛")
+    print(f"Python 錯誤車輛: {len(python_error_vehicles)} 輛")
 
-    # 輸出合併後的 CSV
-    #if not matched_all.empty:
-    #    matched_all.to_csv("matched_events.csv", index=False, encoding='utf-8-sig')
-    #if not only_python_all.empty:
-    #    only_python_all.to_csv("only_in_python.csv", index=False, encoding='utf-8-sig')
-    #if not only_java_all.empty:
-    #    only_java_all.to_csv("only_in_java.csv", index=False, encoding='utf-8-sig')
-
-    # 寄信
+    # 11. 寄信（目前只包含加油事件結果）
     if send_email and email_config:
         send_report_email(
             sender_email=email_config['sender_email'],
@@ -225,7 +266,7 @@ def compare_refuel_events(vehicles=None, country="my", st=None, et=None, limit=N
             country=country
         )
 
-    return matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles
+    return matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df
 
 
 
@@ -335,7 +376,7 @@ def run_again(
 
     # 如果任一結果為空，直接返回
     if python_refuel_results.empty or java_refuel_results.empty:
-        python_no_data_list2 = list(set(retry_unicodes) - set(python_results['unicode'].astype(str).unique()) if not python_results.empty else set(retry_unicodes))
+        python_no_data_list2 = list(set(retry_unicodes) - set(python_refuel_results['unicode'].astype(str).unique()) if not python_refuel_results.empty else set(retry_unicodes))
         java_no_data_list2 = list(set(retry_unicodes) - set(java_refuel_results['unicode'].astype(str).unique()) if not java_refuel_results.empty else set(retry_unicodes))
         # 確保 python_error_vehicles2 是正確的格式
         if isinstance(python_error_vehicles2, (list, tuple)):
@@ -475,21 +516,24 @@ if __name__ == "__main__":
     
     try:
         print(f"從資料庫獲取 {country.upper()} 車輛清單...")
-        # 直接從資料庫獲取車輛清單
-        matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles = compare_refuel_events(
+        # 直接從資料庫獲取車輛清單，同時比對加油和偷油事件
+        matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df = compare_fuel_events(
             vehicles=None,  # 設為 None 會自動從資料庫獲取
             country=country,
             st=st,
             et=et,
-            limit= None,
+            limit= 10,
             send_email=True,
             email_config=email_config
         )
         
         print(f"\n{country.upper()} 處理完成")
-        print(f"成功配對: {len(matched_all)} 筆")
-        print(f"Python 遺漏: {len(only_java_all)} 筆")
-        print(f"Java 遺漏: {len(only_python_all)} 筆")
+        print(f"加油事件成功配對: {len(matched_all)} 筆")
+        print(f"加油事件 Python 遺漏: {len(only_java_all)} 筆")
+        print(f"加油事件 Java 遺漏: {len(only_python_all)} 筆")
+        print(f"偷油事件成功配對: {len(matched_theft_df)} 筆")
+        print(f"偷油事件 Python 遺漏: {len(only_in_java_theft_df)} 筆")
+        print(f"偷油事件 Java 遺漏: {len(only_in_python_theft_df)} 筆")
         
     except Exception as e:
         print(f"處理 {country.upper()} 時發生錯誤: {str(e)}")
@@ -498,11 +542,16 @@ if __name__ == "__main__":
     print("所有處理已完成")
     print(f"{'='*50}")
     
-    # 比對指定日期範圍的加油事件
+    # 比對指定日期範圍的加油和偷油事件
+    # 加油事件結果：
     #matched_all 補跑後matched的結果
     #only_python_all 補跑後only_python的結果
     #only_java_all 補跑後only_java的結果
-    
     #python_no_data_all 補跑後python往前推到最久還是沒資料
     #java_no_data_all 補跑後的 Java 還是沒抓到加油事件資料
     #python_error_vehicles 補跑後的 Python 處理時還是發生錯誤的車輛
+    
+    # 偷油事件結果：
+    #matched_theft_df 偷油事件配對結果
+    #only_in_python_theft_df 只在 Python 中出現的偷油事件
+    #only_in_java_theft_df 只在 Java 中出現的偷油事件
