@@ -731,7 +731,7 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
         # 只保留必要欄位
         keep_columns = [
             'unicode', 'cust_id', 'starttime', 'endtime', 'gis_X', 'gis_Y',
-            'startfuellevel', 'endfuellevel', 'amount'
+            'startfuellevel', 'endfuellevel', 'amount', 'event_type'
         ]
         merged_refuel = merged_refuel[keep_columns]
         merged_theft = merged_theft[keep_columns]
