@@ -592,7 +592,7 @@ if __name__ == "__main__":
             country=country,
             st=st,
             et=et,
-            limit= None,
+            limit= 30,
             send_email=True,
         )
         print(f"\n{country.upper()} 處理完成")

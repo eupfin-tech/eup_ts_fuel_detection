@@ -8,4 +8,5 @@ pymssql==2.3.4
 openpyxl==3.1.5
 tqdm==4.67.1
 cassandra-driver==3.29.2
+graypy==2.1.0
 
