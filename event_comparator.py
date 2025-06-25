@@ -7,7 +7,7 @@ from db_get import get_all_vehicles
 from send_email import send_report_email
 
 
-def compare_fuel_events(vehicles=None, country="my", st=None, et=None, limit=None, send_email=False):
+def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=None, send_email=False):
     """
     比對 Python 和 Java 的加油和偷油事件偵測結果
     
