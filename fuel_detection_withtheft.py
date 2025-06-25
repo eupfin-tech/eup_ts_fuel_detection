@@ -546,7 +546,7 @@ class CatchISData:
             df = df.rename(columns={'dtime': 'time', 'fuel_gauge': 'instant_fuel'})
         return df
 
-def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st=None, et=None, limit=None):
+def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=None, et=None, limit=None):
     """
     偵測指定時間範圍內的加油事件
     
@@ -706,7 +706,7 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
 
         except Exception as e:
             print(f"[錯誤] 處理車輛 {unicode} 時發生錯誤: {str(e)}")
-            python_error_vehicles.append(unicode)  # 修改：改名為 python_error_vehicles
+            python_error_vehicles.append(unicode)  
             continue
 
     if all_results:
@@ -720,27 +720,30 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
             'location_y': 'gis_Y',
             'fuel_before': 'startfuellevel',
             'fuel_after': 'endfuellevel',
-            'fuel_added': 'amount'
+            'fuel_added': 'amount',
+            'event_type': 'event_type'
         }
         merged = merged.rename(columns=column_mapping)
         # 只保留 event_type 為 refuel 的事件
-        merged = merged[merged['event_type'] == 'refuel']
+        merged_refuel = merged[merged['event_type'] == 'refuel']
+        merged_theft = merged[merged['event_type'] == 'theft']
         
         # 只保留必要欄位
         keep_columns = [
             'unicode', 'cust_id', 'starttime', 'endtime', 'gis_X', 'gis_Y',
             'startfuellevel', 'endfuellevel', 'amount'
         ]
-        merged = merged[keep_columns]
+        merged_refuel = merged_refuel[keep_columns]
+        merged_theft = merged_theft[keep_columns]
         
-        return merged, python_no_data_list, python_error_vehicles  # 修改：改名為 python_error_vehicles
+        return merged_refuel, merged_theft, python_no_data_list, python_error_vehicles  
     else:
         print("所有車都沒有偵測到事件")
-        return pd.DataFrame(), python_no_data_list, python_error_vehicles  # 修改：改名為 python_error_vehicles
+        return pd.DataFrame(), pd.DataFrame(), python_no_data_list, python_error_vehicles  
 
 
-# 方式1：直接傳入車輛列表，限制處理5台車
-#detect_refuel_events_for_range(
+#if __name__ == "__main__":
+#    python_refuel_results, python_theft_results, python_no_data_list, python_error_vehicles = detect_fuel_events_for_range(
 #    vehicles=[
 #        {
 #            "unicode": "40009086",
@@ -748,18 +751,20 @@ def detect_refuel_events_for_range(vehicles=None,country=None, csv_path=None, st
 #            "country": "my"
 #        }
 #    ],
-#    st=datetime(2025, 6, 15),
+#    st=datetime(2025, 2, 15),
 #    et=datetime(2025, 6, 17),
 #    limit=5
 #)
+#    print(python_refuel_results)
+#    print(python_theft_results)
+#    print(python_no_data_list)
+#    print(python_error_vehicles)    
 
 # 方式2：從CSV讀取車輛列表，限制處理10台車
-# detect_refuel_events_for_range(
+# detect_fuel_events_for_range(
 #    csv_path=r"C:\work\MY\MY_ALL_Unicode.csv",
 #    country="my",
 #    st=datetime(2025, 5,3),
 #    et=datetime(2025, 5, 5),
 #    limit=5
 #)
-
-
