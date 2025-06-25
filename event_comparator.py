@@ -7,7 +7,7 @@ from db_get import get_all_vehicles
 from send_email import send_report_email
 
 
-def compare_fuel_events(vehicles=None, country="my", st=None, et=None, limit=None, send_email=False, email_config=None):
+def compare_fuel_events(vehicles=None, country="my", st=None, et=None, limit=None, send_email=False):
     """
     比對 Python 和 Java 的加油和偷油事件偵測結果
     
@@ -19,7 +19,6 @@ def compare_fuel_events(vehicles=None, country="my", st=None, et=None, limit=Non
     country: str, 國家代碼，預設為 "my"
     limit: int, 處理的車輛數量限制
     send_email: bool, 是否寄出報告郵件
-    email_config: dict, 郵件設定，包含 sender_email, sender_password, recipient_email
     
     Returns:
     --------
@@ -32,7 +31,6 @@ def compare_fuel_events(vehicles=None, country="my", st=None, et=None, limit=Non
     
     # 如果沒有提供 vehicles，則從資料庫獲取
     if vehicles is None:
-        print(f"從資料庫獲取 {country.upper()} 車輛清單...")
         vehicles_data = get_all_vehicles(country.upper())
         
         if not vehicles_data:
@@ -252,18 +250,18 @@ def compare_fuel_events(vehicles=None, country="my", st=None, et=None, limit=Non
     print(f"Java 無資料車輛: {len(java_no_data_all)} 輛")
     print(f"Python 錯誤車輛: {len(python_error_vehicles)} 輛")
 
-    # 11. 寄信（目前只包含加油事件結果）
-    if send_email and email_config:
+    # 11. 寄信（同時包含加油與偷油事件結果）
+    if send_email:
         send_report_email(
-            sender_email=email_config['sender_email'],
-            sender_password=email_config['sender_password'],
-            recipient_email=email_config['recipient_email'],
             st=st,
             et=et,
             matched_all_df=matched_all,
             only_python_all_df=only_python_all,
             only_java_all_df=only_java_all,
-            country=country
+            country=country,
+            matched_theft_df=matched_theft_df,
+            only_python_theft_df=only_in_python_theft_df,
+            only_java_theft_df=only_in_java_theft_df
         )
 
     return matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df
@@ -491,16 +489,8 @@ def run_again(
 
 # 使用範例
 if __name__ == "__main__":
-    # 郵件設定
-    email_config = {
-        'sender_email': 'ken-liao@eup.com.tw',
-        'sender_password': 'omnb snfb mqtx dmug',
-        'recipient_email': 'ken-liao@eup.com.tw'
-    }
-    
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     et = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
-    
     # 根據環境變數決定要處理的國家，預設為 'my'
     target_country_code = os.getenv('COUNTRY_CODE', 'my').lower()
 
@@ -522,11 +512,9 @@ if __name__ == "__main__":
             country=country,
             st=st,
             et=et,
-            limit= 10,
+            limit= 600,
             send_email=True,
-            email_config=email_config
         )
-        
         print(f"\n{country.upper()} 處理完成")
         print(f"加油事件成功配對: {len(matched_all)} 筆")
         print(f"加油事件 Python 遺漏: {len(only_java_all)} 筆")

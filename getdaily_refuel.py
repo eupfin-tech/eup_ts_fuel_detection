@@ -90,7 +90,7 @@ def getdaily_fuel_events(country, cust_id, unicode, start_time, end_time):
                         start_fuel = float(event.get('startfuellevel', 0))
                         
                         # 這邊要篩選時間，確保加油時間在 start_time 和 end_time 之間
-                        orig_start_time = start_time + timedelta(hours = 1)  
+                        orig_start_time = start_time + timedelta(minutes = 50)  
                         if event['starttime'].tzinfo is not None and orig_start_time.tzinfo is None:
                             orig_start_time = orig_start_time.replace(tzinfo=event['starttime'].tzinfo)
                             

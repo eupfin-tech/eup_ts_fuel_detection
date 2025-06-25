@@ -720,7 +720,8 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
             'location_y': 'gis_Y',
             'fuel_before': 'startfuellevel',
             'fuel_after': 'endfuellevel',
-            'fuel_added': 'amount'
+            'fuel_added': 'amount',
+            'event_type': 'event_type'
         }
         merged = merged.rename(columns=column_mapping)
         # 只保留 event_type 為 refuel 的事件
