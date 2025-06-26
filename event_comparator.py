@@ -299,8 +299,11 @@ def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=Non
     matched_all.drop_duplicates(inplace=True)
     
     only_python_all = pd.concat([only_in_python_refuel_df, only_in_python_df2], ignore_index=True)
-    only_java_all = pd.concat([only_in_java_refuel_df, only_in_java_df2], ignore_index=True)
+    only_python_all = only_python_all.drop_duplicates(subset=['unicode', 'starttime', 'amount'])
     
+    only_java_all = pd.concat([only_in_java_refuel_df, only_in_java_df2], ignore_index=True)
+    only_java_all = only_java_all.drop_duplicates(subset=['unicode', 'starttime', 'amount'])
+
     # 9. 合併無資料和錯誤車輛清單
     python_no_data_all = list(set(python_no_data_list + python_no_data_list2))
     java_no_data_all = list(set(java_no_data_list + java_no_data_list2))
@@ -569,8 +572,8 @@ if __name__ == "__main__":
     test_database_connection()
     test_api_connection()
     
-    st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    et = (datetime.today()).strftime("%Y-%m-%d")  # 今天的日期
+    st = (datetime.today() - timedelta(days=2)).strftime("%Y-%m-%d")
+    et = (datetime.today()-timedelta(days=1)).strftime("%Y-%m-%d")  # 今天的日期
     # 根據環境變數決定要處理的國家，預設為 'my'
     target_country_code = os.getenv('COUNTRY_CODE', 'my').lower()
 
@@ -592,7 +595,7 @@ if __name__ == "__main__":
             country=country,
             st=st,
             et=et,
-            limit= None,
+            limit=None,
             send_email=True,
         )
         print(f"\n{country.upper()} 處理完成")
