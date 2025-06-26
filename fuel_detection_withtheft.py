@@ -454,7 +454,6 @@ class FuelEventDetector:
                 current_event = event
         
         merged_events.append(current_event)
-        
         return merged_events
      
 class CatchISData:
@@ -692,15 +691,28 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
             # 6. 篩選指定範圍的加油事件
             if events is not None and not events.empty:
                 events['event_date'] = pd.to_datetime(events['start_time']).dt.date
-                result = events[
+
+                # refuel
+                result_refuel = events[
                     (events['event_type'] == 'refuel') &
                     (events['event_date'] >= st.date()) &
                     (events['event_date'] <= et.date())
                 ].copy()
-                if not result.empty:
-                    result.loc[:, 'unicode'] = unicode
-                    result.loc[:, 'cust_id'] = cust_id
-                    all_results.append(result)
+                if not result_refuel.empty:
+                    result_refuel.loc[:, 'unicode'] = unicode
+                    result_refuel.loc[:, 'cust_id'] = cust_id
+                    all_results.append(result_refuel)
+
+                # theft
+                result_theft = events[
+                    (events['event_type'] == 'theft') &
+                    (events['event_date'] >= st.date()) &
+                    (events['event_date'] <= et.date())
+                ].copy()
+                if not result_theft.empty:
+                    result_theft.loc[:, 'unicode'] = unicode
+                    result_theft.loc[:, 'cust_id'] = cust_id
+                    all_results.append(result_theft)
             else:
                 print(f"{unicode} 沒有偵測到任何事件")
 
@@ -720,9 +732,17 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
             'location_y': 'gis_Y',
             'fuel_before': 'startfuellevel',
             'fuel_after': 'endfuellevel',
-            'fuel_added': 'amount',
             'event_type': 'event_type'
         }
+
+        # 讓 theft/refuel 都有 amount 欄位
+        merged['amount'] = merged.apply(
+            lambda row: row['fuel_added'] if row['event_type'] == 'refuel' else (
+                row['fuel_loss'] if row['event_type'] == 'theft' else None
+            ),
+            axis=1
+        )
+
         merged = merged.rename(columns=column_mapping)
         # 只保留 event_type 為 refuel 的事件
         merged_refuel = merged[merged['event_type'] == 'refuel']
@@ -735,7 +755,7 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
         ]
         merged_refuel = merged_refuel[keep_columns]
         merged_theft = merged_theft[keep_columns]
-        
+       
         return merged_refuel, merged_theft, python_no_data_list, python_error_vehicles  
     else:
         print("所有車都沒有偵測到事件")
@@ -746,13 +766,13 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
 #    python_refuel_results, python_theft_results, python_no_data_list, python_error_vehicles = detect_fuel_events_for_range(
 #    vehicles=[
 #        {
-#            "unicode": "40009086",
-#            "cust_id": "1423",
+#            "unicode": "40012050",
+#            "cust_id": "1786",
 #            "country": "my"
 #        }
 #    ],
-#    st=datetime(2025, 2, 15),
-#    et=datetime(2025, 6, 17),
+#    st=datetime(2025, 6, 23),
+#    et=datetime(2025, 6, 25),
 #    limit=5
 #)
 #    print(python_refuel_results)
