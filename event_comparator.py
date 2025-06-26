@@ -6,7 +6,9 @@ from fuel_detection_withtheft import detect_fuel_events_for_range
 from getdaily_refuel import process_daily_fuel_events
 from db_get import get_all_vehicles
 from send_email import send_report_email
-
+from observability import init_observability
+from fastapi import FastAPI, HTTPException, APIRouter
+import uvicorn
 
 def debug_environment():
     """除錯環境資訊"""
@@ -572,6 +574,16 @@ if __name__ == "__main__":
     test_database_connection()
     test_api_connection()
     
+    app = FastAPI(
+    title="Calibration Calculator API", 
+    description="API for fuel event detection and comparison. Refuel and theft detection in MY and VN.", 
+    version="1.0.0"
+    )
+    api_router = APIRouter(prefix="/Eup_Ts_Fuel_Detection")
+    init_observability(app)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
+    
+    
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
     # 根據環境變數決定要處理的國家，預設為 'my'
@@ -595,7 +607,7 @@ if __name__ == "__main__":
             country=country,
             st=st,
             et=et,
-            limit=None,
+            limit= None,
             send_email=True,
         )
         print(f"\n{country.upper()} 處理完成")
