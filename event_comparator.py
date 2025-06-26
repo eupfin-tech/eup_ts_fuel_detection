@@ -572,8 +572,8 @@ if __name__ == "__main__":
     test_database_connection()
     test_api_connection()
     
-    st = (datetime.today() - timedelta(days=2)).strftime("%Y-%m-%d")
-    et = (datetime.today()-timedelta(days=1)).strftime("%Y-%m-%d")  # 今天的日期
+    st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
     # 根據環境變數決定要處理的國家，預設為 'my'
     target_country_code = os.getenv('COUNTRY_CODE', 'my').lower()
 
