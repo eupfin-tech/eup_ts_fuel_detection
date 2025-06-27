@@ -575,16 +575,12 @@ def run_again(
     return matched_df2, only_in_python_df2, only_in_java_df2, python_no_data_list2, java_no_data_list2, python_error_vehicles2
 
 
-
 # 使用範例
 if __name__ == "__main__":
     debug_environment()
     check_csv_files()
     test_database_connection()
     test_api_connection()
-    
-    uvicorn.run(app, host="0.0.0.0", port=8080)
-    
     
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
@@ -640,3 +636,9 @@ if __name__ == "__main__":
     #matched_theft_df 偷油事件配對結果
     #only_in_python_theft_df 只在 Python 中出現的偷油事件
     #only_in_java_theft_df 只在 Java 中出現的偷油事件
+    
+    # 最後啟動 FastAPI 伺服器
+    print("\n啟動 FastAPI 伺服器...")
+    print("API 文檔可在 http://localhost:8080/docs 查看")
+    print("按 Ctrl+C 停止伺服器")
+    uvicorn.run(app, host="0.0.0.0", port=8080)
