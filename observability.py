@@ -22,7 +22,7 @@ def _parse_otel_resource_attributes():
     return attributes
 
 
-def init_observability(app, *, service_name: str = "eup-fuel-modeling-api"):
+def init_observability(app, *, service_name: str = "eup-ts-fuel-detection"):
     if os.getenv("MODELING_EXPORTER", "false").lower() != "true":
         return
     
