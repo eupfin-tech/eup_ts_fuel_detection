@@ -24,6 +24,14 @@ RUN ls -la *.csv
 # 設定環境變數（可選）
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+EXPOSE 8080
+
+# 選擇啟動方式：
+# 1. 不使用 OpenTelemetry（簡單）
+#CMD ["uvicorn", "event_comparator:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# 2. 使用 OpenTelemetry（有可觀測性）- 取消註解下面這行，並註解上面那行
+CMD ["opentelemetry-instrument", "uvicorn", "event_comparator:app", "--host", "0.0.0.0", "--port", "8080"]
 
 # 執行前顯示檔案列表和環境資訊
-CMD ["sh", "-c", "echo 'Container started'; ls -la; python -c 'import os; print(\"Current dir:\", os.getcwd()); print(\"Files:\", os.listdir(\".\"))'; python event_comparator.py"]
+#CMD ["sh", "-c", "echo 'Container started'; ls -la; python -c 'import os; print(\"Current dir:\", os.getcwd()); print(\"Files:\", os.listdir(\".\"))'; python event_comparator.py"]
