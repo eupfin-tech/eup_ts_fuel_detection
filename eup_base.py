@@ -3,6 +3,7 @@ This is the base class for all EUP related API.
 """
 import os
 import json
+import platform
 from typing import Iterable
 from datetime import datetime, timedelta, timezone
 from functools import cache
@@ -11,7 +12,8 @@ import ssl
 import pandas as pd
 import requests
 import yaml
-
+import pymssql
+  
 
 # Our System: fms, crm, is, log
 server_settings = {
@@ -322,42 +324,95 @@ def getManyRedis(country: str, keys: list[str], value_type: str = "string") -> l
 # local develop
 
 
-def readServerSetting(
-    key: str,
-    path="/opt/tomcat/conf/ServerSetting.yml",
-):
-    with open(path, "r") as file:
+def readServerSetting(key: str, path=None):
+    """
+    Read server setting with OS-specific path detection
+    """
+    # Auto-detect path based on OS if not provided
+    if path is None:
+        system = platform.system()
+        if system == "Windows":
+            path = "/Config/ServerSetting.yml"
+        else:
+            path = "/opt/tomcat/conf/ServerSetting.yml"
+
+    if not os.path.exists(path):
+        fallback_paths = [
+            "ServerSetting.yml",
+            "./ServerSetting.yml", 
+            "Config/ServerSetting.yml",
+            "config/ServerSetting.yml"
+        ]
+        
+        path_found = False
+        for fallback_path in fallback_paths:
+            if os.path.exists(fallback_path):
+                path = fallback_path
+                path_found = True
+                break
+        
+        if not path_found:
+            raise FileNotFoundError(f"ServerSetting.yml not found at {path} or any fallback locations")
+    
+    with open(path, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
 
-    # internationalSetting, CRMSetting
+    # 讀取國家設定
+    country = None
+    if "internationalSetting" in config and "country" in config["internationalSetting"]:
+        country = config["internationalSetting"]["country"].lower()
+
     if key in config:
-        return config[key]
-    # serviceSetting
-    if key in config["serviceSetting"]:
-        return config["serviceSetting"][key]
-    # dbConnection.single
-    # dbConnection.cluster
-    for i in [
-        *config["dbConnection"]["single"],
-        *config["dbConnection"]["cluster"],
-    ]:
-        for j in i["nameGroup"]:
-            if key == j["useName"]:
-                return {
-                    **i,
-                    **j,
-                }
+        result = config[key]
+        if country:
+            result["country"] = country
+        return result
+
+    if "serviceSetting" in config and key in config["serviceSetting"]:
+        result = config["serviceSetting"][key]
+        if country:
+            result["country"] = country
+        return result
+    
+    if "dbConnection" in config:
+        for i in [
+            *config["dbConnection"].get("single", []),
+            *config["dbConnection"].get("cluster", []),
+        ]:
+            if "nameGroup" in i:
+                for j in i["nameGroup"]:
+                    if key == j.get("useName"):
+                        result = {**i, **j}
+                        if country:
+                            result["country"] = country
+                        return result
 
 
 @cache
-def getSqlSession():
-    # pip install pymssql
-    import pymssql
+def getSqlSession(database: str = "CTMS_Center"):
+    mssql_config = readServerSetting(database)
+    conn = pymssql.connect(
+        mssql_config["path"].replace("MS://", ""),
+        mssql_config["account"],
+        mssql_config["password"],
+        mssql_config["dbName"],
+    )
+    return conn, mssql_config.get("country", "vn")
 
-    # stage1
-    return pymssql.connect("10.1.30.201", "EupPGUser", "9Vyj6@6F", "master")
+def querySql(sql: str, country: str = "", database: str = "CTMS_Center", params=None) -> pd.DataFrame:
+    if not country:
+        return pd.read_sql(sql, getSqlSession(database), params=params)
+    else:
+        new_db_name = "_" + country.upper()
+        if country == "vn":
+            new_db_name = "_VNM"
+        elif country == "tw":
+            new_db_name = ""
+        return pd.read_sql(
+            sql.replace("_MY", new_db_name), getSqlSession(database), params=params
+        )
 
-
+"""
 def querySql(sql: str, country: str = "", params=None) -> pd.DataFrame:
     if not country:
         return pd.read_sql(sql, getSqlSession(), params=params)
@@ -370,7 +425,7 @@ def querySql(sql: str, country: str = "", params=None) -> pd.DataFrame:
         return pd.read_sql(
             sql.replace("_MY", new_db_name), getSqlSession(), params=params
         )
-
+"""
 
 @cache
 def getRedisSession():

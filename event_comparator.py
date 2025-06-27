@@ -102,7 +102,7 @@ def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=Non
     vehicles: list, 車輛清單，格式為 [{"unicode": "xxx", "cust_id": "xxx", "country": "xxx"}]
     st: str, 格式為 "YYYY-MM-DD"，開始日期
     et: str, 格式為 "YYYY-MM-DD"，結束日期
-    country: str, 國家代碼，預設為 "my"
+    country: str, 國家代碼，如果為 None 會自動從配置檔案讀取
     limit: int, 處理的車輛數量限制
     send_email: bool, 是否寄出報告郵件
     
@@ -111,13 +111,20 @@ def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=Non
     tuple: (matched_events, only_in_python, only_in_java, python_no_data_list, java_no_data_list, python_error_vehicles, 
             matched_theft_events, only_in_python_theft, only_in_java_theft)
     """
+    # 如果沒有指定國家，自動從配置檔案讀取
+    if country is None:
+        from eup_base import getSqlSession
+        conn, config_country = getSqlSession("CTMS_Center")
+        country = config_country.lower()  # 確保是小寫
+        print(f"自動檢測到國家: {country.upper()}")
+    
     # 轉換日期為 datetime
     st = datetime.strptime(st, "%Y-%m-%d")
     et = datetime.strptime(et, "%Y-%m-%d")
     
     # 如果沒有提供 vehicles，則從資料庫獲取
     if vehicles is None:
-        vehicles_data = get_all_vehicles(country.upper())
+        vehicles_data = get_all_vehicles(country.upper())  # db_get.py 需要大寫
         
         if not vehicles_data:
             print(f"警告: 沒有找到 {country.upper()} 的車輛資料")
@@ -129,7 +136,7 @@ def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=Non
             vehicles.append({
                 "unicode": str(vehicle['Unicode']),
                 "cust_id": str(vehicle['Cust_ID']),
-                "country": country
+                "country": country.lower()  # 確保是小寫，因為其他函數需要小寫
             })
         print(f"成功獲取 {len(vehicles)} 輛車")
     
@@ -585,31 +592,30 @@ if __name__ == "__main__":
     
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
-    # 根據環境變數決定要處理的國家，預設為 'my'
-    target_country_code = os.getenv('COUNTRY_CODE', 'my').lower()
-
-    # 國家設定
-    countries = ["my", "vn"]
-    
-    # 找到目標國家的設定，如果找不到就用第一個 (my)
-    country = target_country_code if target_country_code in countries else "my"
     
     print(f"\n{'='*50}")
-    print(f"準備處理國家: {country.upper()} (來自環境變數或預設)")
+    print(f"開始自動處理 (國家設定來自 ServerSetting.yml)")
     print(f"{'='*50}")
     
     try:
-        print(f"從資料庫獲取 {country.upper()} 車輛清單...")
+        print(f"從資料庫獲取車輛清單...")
         # 直接從資料庫獲取車輛清單，同時比對加油和偷油事件
+        # country 參數設為 None，讓 db_get.py 自動從配置檔案讀取
         matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df = compare_fuel_events(
             vehicles=None,  # 設為 None 會自動從資料庫獲取
-            country=country,
+            country=None,   # 設為 None 會自動從配置檔案讀取國家
             st=st,
             et=et,
             limit= None,
             send_email=True,
         )
-        print(f"\n{country.upper()} 處理完成")
+        
+        # 從連接物件取得國家資訊來顯示
+        from eup_base import getSqlSession
+        conn, config_country = getSqlSession("CTMS_Center")
+        country_display = config_country.upper()
+        
+        print(f"\n{country_display} 處理完成")
         print(f"加油事件成功配對: {len(matched_all)} 筆")
         print(f"加油事件 Python 遺漏: {len(only_java_all)} 筆")
         print(f"加油事件 Java 遺漏: {len(only_python_all)} 筆")
@@ -618,7 +624,7 @@ if __name__ == "__main__":
         print(f"偷油事件 Java 遺漏: {len(only_in_python_theft_df)} 筆")
         
     except Exception as e:
-        print(f"處理 {country.upper()} 時發生錯誤: {str(e)}")
+        print(f"處理時發生錯誤: {str(e)}")
     
     print(f"\n{'='*50}")
     print("所有處理已完成")

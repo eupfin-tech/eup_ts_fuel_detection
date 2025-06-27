@@ -1,26 +1,30 @@
 from eup_base import getSqlSession
 
-def get_all_vehicles(country: str = "MY"):
+def get_all_vehicles(country: str = None):
     """
     獲取指定國家所有車輛的 Unicode 和 cust_id
-    支援的國家: MY, VN
+    支援的國家: MY, VN, TW
+    如果不指定國家，會自動從配置檔案讀取
     """
     try:
-        conn = getSqlSession()
+        conn, config_country = getSqlSession("CTMS_Center")
+        
+        # 如果沒有指定國家，使用配置檔案中的國家
+        if country is None:
+            country = config_country.upper()
+        
         cursor = conn.cursor(as_dict=True)
         
         # 動態設定國家後綴
         country_suffix = country.upper()
         if country_suffix == "VN":
             country_suffix = "VNM"
-        elif country_suffix == "MY":
-            country_suffix = "MY"
-        else:
-            raise ValueError(f"不支援的國家: {country}，只支援 MY, VN")
+        elif country_suffix == "TW":
+            country_suffix = ""
         
         # 動態設定資料庫名稱
-        web_im_db = f"EUP_Web_IM_{country_suffix}"
-        ctms_db = f"CTMS_Center_{country_suffix}"
+        web_im_db = f"EUP_Web_IM_{country_suffix}" if country_suffix else "EUP_Web_IM"
+        ctms_db = f"CTMS_Center_{country_suffix}" if country_suffix else "CTMS_Center"
         
         sql = f"""
         SELECT DISTINCT
@@ -167,7 +171,7 @@ if __name__ == "__main__":
     # 測試馬來西亞
     print("開始獲取馬來西亞車輛清單...")
     my_vehicles = get_all_vehicles("MY")
-    print(f"馬來西亞總共找到 {len(my_vehicles)} 輛車")
+    print(f"馬來西亞總共找到 {len(my_vehicles)} 輛車")  
     
     # 測試越南
     print("\n開始獲取越南車輛清單...")
@@ -179,3 +183,9 @@ if __name__ == "__main__":
         print(f"\n{country}前3輛車:")
         for i, vehicle in enumerate(vehicles[:3]):
             print(f"  車輛 {i+1}: Unicode={vehicle['Unicode']}, Customer ID={vehicle['Cust_ID']}, IMID={vehicle['Cust_IMID']}")
+
+def readServerSetting(key: str, country: str = None, path=None):
+    # 根據國家讀取不同配置
+    if country:
+        country_key = f"{key}_{country.upper()}"
+        # 讀取國家特定配置
