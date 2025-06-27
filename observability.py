@@ -22,29 +22,46 @@ def _parse_otel_resource_attributes():
     return attributes
 
 
-def init_observability(app, *, service_name: str = "eup-ts-fuel-detection"):
+#def init_observability(app, *, service_name: str = "eup-ts-fuel-detection"):
+#    if os.getenv("MODELING_EXPORTER", "false").lower() != "true":
+#        return
+#    
+#    if "service.name" not in otel_attributes:
+#        raise ValueError(
+#            "OTEL_RESOURCE_ATTRIBUTES must contain service.name."
+#            "Please ensure the tempo-internal variable group is correctly linked to the pipeline,"
+#            f"currently OTEL_RESOURCE_ATTRIBUTES = '{os.getenv('OTEL_RESOURCE_ATTRIBUTES', 'NOT_SET')}'"
+#        )
+#    
+#    otel_attributes = _parse_otel_resource_attributes()
+#    resource_attributes = {"service.name": service_name}
+#    resource_attributes.update(otel_attributes) 
+#    
+#    resource = Resource.create(resource_attributes)
+#    provider = TracerProvider(resource=resource)
+#    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+#    trace.set_tracer_provider(provider)
+
+#    FastAPIInstrumentor().instrument_app(app)
+#    RequestsInstrumentor().instrument()
+    
+def get_service_name():
+    return os.getenv("SERVICE_NAME", "eup-ts-fuel-detection")
+    
+def init_observability():
     if os.getenv("MODELING_EXPORTER", "false").lower() != "true":
         return
     
-    if "service.name" not in otel_attributes:
-        raise ValueError(
-            "OTEL_RESOURCE_ATTRIBUTES must contain service.name."
-            "Please ensure the tempo-internal variable group is correctly linked to the pipeline,"
-            f"currently OTEL_RESOURCE_ATTRIBUTES = '{os.getenv('OTEL_RESOURCE_ATTRIBUTES', 'NOT_SET')}'"
-        )
-    
     otel_attributes = _parse_otel_resource_attributes()
-    resource_attributes = {"service.name": service_name}
-    resource_attributes.update(otel_attributes) 
-    
-    resource = Resource.create(resource_attributes)
+    if "service.name" not in otel_attributes:
+        otel_attributes["service.name"] = get_service_name()
+
+    resource = Resource.create(otel_attributes)
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     trace.set_tracer_provider(provider)
 
-    FastAPIInstrumentor().instrument_app(app)
     RequestsInstrumentor().instrument()
-    
 
 def traced_query_sql(fn):
     @wraps(fn)

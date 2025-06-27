@@ -584,13 +584,13 @@ def run_again(
 
 # 使用範例
 if __name__ == "__main__":
+    from observability import init_observability
+    init_observability()
     debug_environment()
     check_csv_files()
     test_database_connection()
     test_api_connection()
-    print('init observability')
-    init_observability(app)
-    print('init observability done')
+  
     
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
