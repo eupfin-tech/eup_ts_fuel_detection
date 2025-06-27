@@ -10,6 +10,15 @@ from observability import init_observability
 from fastapi import FastAPI, HTTPException, APIRouter
 import uvicorn
 
+
+app = FastAPI(
+    title="Calibration Calculator API", 
+    description="API for fuel event detection and comparison. Refuel and theft detection in MY and VN.", 
+    version="1.0.0"
+    )
+api_router = APIRouter(prefix="/Eup_Ts_Fuel_Detection")
+init_observability(app)
+
 def debug_environment():
     """除錯環境資訊"""
     print("=" * 50)
@@ -574,13 +583,6 @@ if __name__ == "__main__":
     test_database_connection()
     test_api_connection()
     
-    app = FastAPI(
-    title="Calibration Calculator API", 
-    description="API for fuel event detection and comparison. Refuel and theft detection in MY and VN.", 
-    version="1.0.0"
-    )
-    api_router = APIRouter(prefix="/Eup_Ts_Fuel_Detection")
-    init_observability(app)
     uvicorn.run(app, host="0.0.0.0", port=8080)
     
     
