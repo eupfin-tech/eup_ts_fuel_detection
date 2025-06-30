@@ -9,8 +9,8 @@ EMAIL_CONFIG = {
     'sender_password': 'omnb snfb mqtx dmug',
     'recipient_emails': [
         'ken-liao@eup.com.tw',
-        'partrick@eup.com.tw',  # 請替換為第一個收件者
-        'ian-tuan@eup.com.tw'   # 請替換為第二個收件者
+        'patrick@eup.com.tw',  # 第一個收件者
+        'ian-tuan@eup.com.tw'   # 第二個收件者
     ]
 }
 
