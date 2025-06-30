@@ -10,7 +10,6 @@ from observability import init_observability
 from fastapi import FastAPI, HTTPException, APIRouter
 import uvicorn
 
-
 app = FastAPI(
     title="Calibration Calculator API", 
     description="API for fuel event detection and comparison. Refuel and theft detection in MY and VN.", 
@@ -61,6 +60,7 @@ def check_csv_files():
                 print(f"  {filename}: EXISTS but ERROR reading: {e}")
         else:
             print(f"  {filename}: NOT FOUND")
+
 
 def test_database_connection():
     """測試資料庫連線"""
