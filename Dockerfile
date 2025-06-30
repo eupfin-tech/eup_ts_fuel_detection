@@ -29,7 +29,12 @@ EXPOSE 8080
 # 選擇啟動方式：
 
 # 1. 執行完整的事件比對邏輯 + API 服務（推薦）
-CMD ["sh", "-c", "echo 'Container started'; ls -la; python -c 'import os; print(\"Current dir:\", os.getcwd()); print(\"Files:\", os.listdir(\".\"))'; python event_comparator.py"]
+# 啟動OpenTelemetry
+# 用uvicorn啟動
+CMD ["opentelemetry-instrument", "python", "event_comparator.py"]
+
+# 不啟動OpenTelemetry
+#CMD ["sh", "-c", "echo 'Container started'; ls -la; python -c 'import os; print(\"Current dir:\", os.getcwd()); print(\"Files:\", os.listdir(\".\"))'; python event_comparator.py"]
 
 # 2. 只啟動 API 服務（不執行事件比對邏輯）
 # CMD ["uvicorn", "event_comparator:app", "--host", "0.0.0.0", "--port", "8080"]
