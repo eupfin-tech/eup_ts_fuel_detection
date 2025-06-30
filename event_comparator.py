@@ -7,16 +7,7 @@ from getdaily_refuel import process_daily_fuel_events
 from db_get import get_all_vehicles
 from send_email import send_report_email
 from observability import init_observability
-from fastapi import FastAPI, HTTPException, APIRouter
 import uvicorn
-
-app = FastAPI(
-    title="Calibration Calculator API", 
-    description="API for fuel event detection and comparison. Refuel and theft detection in MY and VN.", 
-    version="1.0.0"
-    )
-api_router = APIRouter(prefix="/Eup_Ts_Fuel_Detection")
-
 
 def debug_environment():
     """除錯環境資訊"""
