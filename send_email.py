@@ -7,7 +7,11 @@ from io import StringIO
 EMAIL_CONFIG = {
     'sender_email': 'ken-liao@eup.com.tw',
     'sender_password': 'omnb snfb mqtx dmug',
-    'recipient_email': 'ken-liao@eup.com.tw'
+    'recipient_emails': [
+        'ken-liao@eup.com.tw',
+        'partrick@eup.com.tw',  # 請替換為第一個收件者
+        'ian-tuan@eup.com.tw'   # 請替換為第二個收件者
+    ]
 }
 
 def send_report_email(
@@ -23,13 +27,13 @@ def send_report_email(
         email_config = EMAIL_CONFIG
     sender_email = email_config['sender_email']
     sender_password = email_config['sender_password']
-    recipient_email = email_config['recipient_email']
+    recipient_emails = email_config['recipient_emails']
 
     msg = MIMEMultipart()
     country_display = country.upper() if country else ""
     msg['Subject'] = f'加油/偷油事件比對報告 - {country_display} ({st} 到 {et})'
     msg['From'] = sender_email
-    msg['To'] = recipient_email
+    msg['To'] = ', '.join(recipient_emails)
 
     # 加油事件摘要
     refuel_summary = f"""
@@ -85,7 +89,8 @@ def send_report_email(
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(sender_email, sender_password)
-            smtp.send_message(msg)
-        print("報告已成功寄出")
+            # 寄給所有收件者
+            smtp.send_message(msg, to_addrs=recipient_emails)
+        print(f"報告已成功寄出給 {len(recipient_emails)} 個收件者: {', '.join(recipient_emails)}")
     except Exception as e:
         print(f"寄出報告時發生錯誤: {str(e)}")
