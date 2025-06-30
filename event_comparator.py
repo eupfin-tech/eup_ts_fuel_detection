@@ -7,7 +7,7 @@ from getdaily_refuel import process_daily_fuel_events
 from db_get import get_all_vehicles
 from send_email import send_report_email
 from observability import init_observability
-import uvicorn
+
 
 def debug_environment():
     """除錯環境資訊"""
