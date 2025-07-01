@@ -11,10 +11,12 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt \
  && python -m pip install --no-cache-dir \
-      opentelemetry-api==1.21.0 \
-      opentelemetry-sdk==1.21.0 \
-      opentelemetry-exporter-otlp==1.21.0 \
-      opentelemetry-instrumentation-requests==0.42b0
+      opentelemetry-api==1.34.1 \
+      opentelemetry-sdk==1.34.1 \
+      opentelemetry-exporter-otlp-proto-grpc==1.34.1 \
+      opentelemetry-instrumentation-fastapi==0.55b1 \
+      opentelemetry-instrumentation-requests==0.55b1 \
+      opentelemetry-util-http==0.55b1
 
 WORKDIR /app
 COPY . .
