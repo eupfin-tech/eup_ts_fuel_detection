@@ -353,9 +353,10 @@ def readServerSetting(key: str, path=None):
         
         if not path_found:
             raise FileNotFoundError(f"ServerSetting.yml not found at {path} or any fallback locations")
-    
+    print(f"path: {path}")
     with open(path, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
+        print(f"config: {config}")
 
     # 讀取國家設定
     country = None
@@ -391,6 +392,7 @@ def readServerSetting(key: str, path=None):
 @cache
 def getSqlSession(database: str = "CTMS_Center"):
     mssql_config = readServerSetting(database)
+    print(f"mssql_config: {mssql_config}")
     conn = pymssql.connect(
         mssql_config["path"].replace("MS://", ""),
         mssql_config["account"],

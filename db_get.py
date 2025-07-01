@@ -25,7 +25,7 @@ def get_all_vehicles(country: str = None):
         # 動態設定資料庫名稱
         web_im_db = f"EUP_Web_IM_{country_suffix}" if country_suffix else "EUP_Web_IM"
         ctms_db = f"CTMS_Center_{country_suffix}" if country_suffix else "CTMS_Center"
-        
+        print(f"web_im_db: {web_im_db}, ctms_db: {ctms_db}")
         sql = f"""
         SELECT DISTINCT
             CL.Unicode,
