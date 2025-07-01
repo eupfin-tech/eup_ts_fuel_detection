@@ -27,7 +27,6 @@ def _parse_otel_resource_attributes() -> dict:
             attrs[k.strip()] = v.strip()
     return attrs
 
-
 def _default_service_name() -> str:
     return os.getenv("PROJECT_NAME", "unknown") + "-" + os.getenv("STAGE", "dev")
 

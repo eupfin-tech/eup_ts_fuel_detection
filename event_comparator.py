@@ -8,7 +8,6 @@ from db_get import get_all_vehicles
 from send_email import send_report_email
 from observability import init_observability
 
-
 def debug_environment():
     """除錯環境資訊"""
     print("=" * 50)
@@ -52,23 +51,25 @@ def check_csv_files():
         else:
             print(f"  {filename}: NOT FOUND")
 
-
 def test_database_connection():
     """測試資料庫連線"""
     print("DEBUG: Testing database connection...")
     try:
         from eup_base import getSqlSession
-        conn = getSqlSession()
+        conn, config_country = getSqlSession("CTMS_Center")
         # 測試連線是否有效
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         result = cursor.fetchone()
         cursor.close()
         print("  Database connection: SUCCESS")
+        print(f"  Config country: {config_country}")
         # 不要關閉連線，因為 getSqlSession 使用了 @cache 裝飾器
         # conn.close()  # 移除這行
     except Exception as e:
         print(f"  Database connection: FAILED - {e}")
+        import traceback
+        traceback.print_exc()
 
 def test_api_connection():
     """測試 API 連線"""
@@ -599,7 +600,7 @@ if __name__ == "__main__":
             country=None,   # 設為 None 會自動從配置檔案讀取國家
             st=st,
             et=et,
-            limit= 50,
+            limit= None,
             send_email=True,
         )
         
