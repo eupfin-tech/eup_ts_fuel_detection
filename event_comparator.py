@@ -582,10 +582,12 @@ if __name__ == "__main__":
     check_csv_files()
     test_database_connection()
     test_api_connection()
-  
     
-    st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
+    #st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    #et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
+    
+    st = "2025-06-01"
+    et = "2025-06-30"
     
     print(f"\n{'='*50}")
     print(f"開始自動處理 (國家設定來自 ServerSetting.yml)")
@@ -597,10 +599,10 @@ if __name__ == "__main__":
         # country 參數設為 None，讓 db_get.py 自動從配置檔案讀取
         matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df = compare_fuel_events(
             vehicles=None,  # 設為 None 會自動從資料庫獲取
-            country=None,   # 設為 None 會自動從配置檔案讀取國家
+            country="my",   # 設為 None 會自動從配置檔案讀取國家
             st=st,
             et=et,
-            limit= None,
+            limit= 100,
             send_email=True,
         )
         

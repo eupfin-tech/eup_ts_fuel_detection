@@ -138,10 +138,10 @@ class FuelEventDetector:
         
         # 根據噪音水平調整平滑窗口
         if profile['data_quality'] == 'low':
-            params['smoothing_window'] = max(7, base_params['smoothing_window'])
+            params['smoothing_window'] = max(5, base_params['smoothing_window'])
         elif profile['data_quality'] == 'high':
             params['smoothing_window'] = min(3, base_params['smoothing_window'])
-        
+        print(params['smoothing_window'])
         # 根據數據變化特徵調整穩定閾值
         params['stable_threshold'] = max(
             profile['noise_level'] * 2,  # 至少是噪音水平的2倍
@@ -334,7 +334,7 @@ class FuelEventDetector:
                     consecutive_stable = 0
                 
                 # 如果連續穩定超過閾值，且已有顯著變化 10 0.5
-                if consecutive_stable >= 8 and total_change > min_voltage_change * 0.5:  # 降低穩定判斷和變化量要求
+                if consecutive_stable >= 5 and total_change > min_voltage_change * 0.5:  # 降低穩定判斷和變化量要求
                     break
             
             # 對於偷油事件，即使沒有連續下降，也要檢查累積變化
@@ -378,7 +378,21 @@ class FuelEventDetector:
                 'end_idx': end_idx
             }
         
-        return None
+        return None   
+    
+    def shake_filter(self, event, window=20):
+        """判斷加油事件是否為真實加油(避免U型波動被誤判為加油)"""
+        # 事件前window分鐘的最大油量
+        before_mask = (self.fuel_df['time'] >= event['start_time'] - pd.Timedelta(minutes=window)) & (self.fuel_df['time'] < event['start_time'])
+        before_max = self.fuel_df.loc[before_mask, 'smooth_fuel'].max() if before_mask.any() else None
+        # 事件後window分鐘的最大油量
+        after_mask = (self.fuel_df['time'] > event['end_time']) & (self.fuel_df['time'] <= event['end_time'] + pd.Timedelta(minutes=window))
+        after_max = self.fuel_df.loc[after_mask, 'smooth_fuel'].max() if after_mask.any() else None
+        # 判斷加油後的油量是否高於加油前
+        if before_max is not None and after_max is not None:
+            return after_max > before_max + 5
+        return True  # 無法判斷時不過濾
+
     
     def _filter_and_merge_events(self, events, min_voltage_change, event_type='refuel'):
         """過濾和合併油量事件"""
@@ -398,7 +412,8 @@ class FuelEventDetector:
                     abs(event['voltage_change']) >= min_voltage_change * 0.8 and
                     event.get('fuel_added', 0) >= 10 and
                     event['change_rate'] > 10):
-                    filtered_events.append(event)
+                    if self.shake_filter(event):
+                        filtered_events.append(event)
             else:  # theft
                 # 偷油事件的合理性檢查 - 更嚴格的條件
                 if (event['duration_minutes'] >= 5 and  # 偷油至少需要5分鐘
@@ -455,7 +470,8 @@ class FuelEventDetector:
         
         merged_events.append(current_event)
         return merged_events
-     
+
+
 class CatchISData:
     def __init__(self, country):
         self.country = country
@@ -666,7 +682,7 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
             all_df['time'] = pd.to_datetime(all_df['time'])
             calibration_df = all_df[all_df['time'] < st].copy()
             target_df = all_df[all_df['time'] >= st].copy()
-            
+
             # 3. 使用校準期間資料建立偵測器並計算自適應參數(calibration_df)
             calibration_detector = FuelEventDetector(model=model_data, fuel_data=calibration_df)
             if not hasattr(calibration_detector, 'has_valid_data') or not calibration_detector.has_valid_data:
@@ -687,27 +703,45 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
                 min_voltage_change = adaptive_params['min_voltage_change'],
                 stable_threshold = adaptive_params['stable_threshold']
             )
-
-            # 6. 篩選指定範圍的加油事件
+            
+            # 6. 篩選指定範圍的加油事件（修正跨日處理）
             if events is not None and not events.empty:
                 events['event_date'] = pd.to_datetime(events['start_time']).dt.date
 
-                # refuel
+                # refuel - 修正跨日篩選邏輯
                 result_refuel = events[
                     (events['event_type'] == 'refuel') &
-                    (events['event_date'] >= st.date()) &
-                    (events['event_date'] <= et.date())
+                    (
+                        # 事件開始時間在範圍內
+                        (events['start_time'] >= pd.Timestamp(st)) &
+                        (events['start_time'] <= pd.Timestamp(et)) |
+                        # 事件結束時間在範圍內
+                        (events['end_time'] >= pd.Timestamp(st)) &
+                        (events['end_time'] <= pd.Timestamp(et)) |
+                        # 事件跨越範圍（開始時間早於範圍開始，結束時間晚於範圍結束）
+                        (events['start_time'] <= pd.Timestamp(st)) &
+                        (events['end_time'] >= pd.Timestamp(et))
+                    )
                 ].copy()
                 if not result_refuel.empty:
                     result_refuel.loc[:, 'unicode'] = unicode
                     result_refuel.loc[:, 'cust_id'] = cust_id
                     all_results.append(result_refuel)
 
-                # theft
+                # theft - 同樣修正跨日篩選邏輯
                 result_theft = events[
                     (events['event_type'] == 'theft') &
-                    (events['event_date'] >= st.date()) &
-                    (events['event_date'] <= et.date())
+                    (
+                        # 事件開始時間在範圍內
+                        (events['start_time'] >= pd.Timestamp(st)) &
+                        (events['start_time'] <= pd.Timestamp(et)) |
+                        # 事件結束時間在範圍內
+                        (events['end_time'] >= pd.Timestamp(st)) &
+                        (events['end_time'] <= pd.Timestamp(et)) |
+                        # 事件跨越範圍（開始時間早於範圍開始，結束時間晚於範圍結束）
+                        (events['start_time'] <= pd.Timestamp(st)) &
+                        (events['end_time'] >= pd.Timestamp(et))
+                    )
                 ].copy()
                 if not result_theft.empty:
                     result_theft.loc[:, 'unicode'] = unicode
@@ -755,26 +789,26 @@ def detect_fuel_events_for_range(vehicles=None,country=None, csv_path=None, st=N
         ]
         merged_refuel = merged_refuel[keep_columns]
         merged_theft = merged_theft[keep_columns]
-       
+        print(merged_refuel)
         return merged_refuel, merged_theft, python_no_data_list, python_error_vehicles  
     else:
         print("所有車都沒有偵測到事件")
         return pd.DataFrame(), pd.DataFrame(), python_no_data_list, python_error_vehicles  
 
 
-#if __name__ == "__main__":
-#    python_refuel_results, python_theft_results, python_no_data_list, python_error_vehicles = detect_fuel_events_for_range(
-#    vehicles=[
-#        {
-#            "unicode": "40012050",
-#            "cust_id": "1786",
-#            "country": "my"
-#        }
-#    ],
-#    st=datetime(2025, 6, 23),
-#    et=datetime(2025, 6, 25),
-#    limit=5
-#)
+if __name__ == "__main__":
+    python_refuel_results, python_theft_results, python_no_data_list, python_error_vehicles = detect_fuel_events_for_range(
+    vehicles=[
+        {
+            "unicode": "40000116",
+            "cust_id": "35",
+            "country": "my"
+        }
+    ],
+    st=datetime(2025, 6, 10),
+    et=datetime(2025, 6, 20),
+    limit=5
+)
 #    print(python_refuel_results)
 #    print(python_theft_results)
 #    print(python_no_data_list)
