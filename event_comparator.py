@@ -597,10 +597,10 @@ if __name__ == "__main__":
         # country 參數設為 None，讓 db_get.py 自動從配置檔案讀取
         matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df = compare_fuel_events(
             vehicles=None,  # 設為 None 會自動從資料庫獲取
-            country=None,   # 設為 None 會自動從配置檔案讀取國家
+            country= None,   # 設為 None 會自動從配置檔案讀取國家
             st=st,
             et=et,
-            limit= None,
+            limit= 50,
             send_email=True,
         )
         
