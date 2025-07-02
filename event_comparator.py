@@ -600,7 +600,7 @@ if __name__ == "__main__":
             country= None,   # 設為 None 會自動從配置檔案讀取國家
             st=st,
             et=et,
-            limit= 50,
+            limit= None,
             send_email=True,
         )
         
