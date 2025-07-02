@@ -8,6 +8,7 @@ from db_get import get_all_vehicles
 from send_email import send_report_email
 from observability import init_observability
 
+
 def debug_environment():
     """除錯環境資訊"""
     print("=" * 50)
@@ -84,21 +85,130 @@ def test_api_connection():
             print(f"  Internet connection: FAILED - Status {response.status_code}")
     except Exception as e:
         print(f"  Internet connection: FAILED - {e}")
+ 
+#初始化
+def init_information(
+    vehicles: list[dict],
+    country: str,
+    st: str,
+    et: str,
+    limit: int) -> tuple[list[dict], str, datetime, datetime]:
+    
+    #country
+    if country is None:
+        from eup_base import getSqlSession
+        conn, config_country = getSqlSession("CTMS_Center")
+        country = config_country.lower()  # 確保是小寫
+        
+    
+    #vehicles
+    if vehicles is None:
+        vehicles_data = get_all_vehicles(country.upper()) #撈db要
+        if not vehicles_data:
+            return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+                    [], [], [], pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+        vehicles = []
+        for vehicle in vehicles_data:
+            vehicles.append({
+                "unicode": str(vehicle['Unicode']),
+                "cust_id": str(vehicle['Cust_ID']),
+                "country": country.lower()  # 確保是小寫，因為其他函數需要小寫
+            })
+    
+    #st, et
+    st = datetime.strptime(st, "%Y-%m-%d")
+    et = datetime.strptime(et, "%Y-%m-%d")
+    
+    #limit
+    if limit:
+        vehicles = vehicles[:limit]
+        
+    return vehicles, country, st, et
+        
+        
+    
+     
+
+ 
+ 
+ 
+ 
+#將 starttime/endtime 轉成 datetime，amount 轉成 numeric   
+def standardize_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if not df.empty:
+        df['starttime'] = pd.to_datetime(df['starttime'], errors='coerce')
+        df['endtime'] = pd.to_datetime(df['endtime'], errors='coerce')
+        df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+    return df
+
+#比對兩演算法的加油和偷油事件
+def compare_events(
+    python_results: pd.DataFrame, 
+    java_results: pd.DataFrame, 
+    time_window: int = 45 ) -> tuple[list[dict], list[dict], list[dict]]:
+    
+    matched_events, only_in_python, only_in_java = [], [], []   
+    used_python_idx = set()
+    
+    if python_results.empty or java_results.empty:
+        if python_results.empty and not java_results.empty:
+            only_in_java = java_results.to_dict('records')
+            
+        elif not python_results.empty and java_results.empty:
+            only_in_python = python_results.to_dict('records')
+        return matched_events, only_in_python, only_in_java
+    
+    for _, java_row in java_results.iterrows():
+        car, java_time, java_amount = java_row['unicode'], java_row['starttime'], float(java_row['amount'])
+        
+        python_candidates = python_results[
+            (python_results['unicode'] == car) &
+            (~python_results.index.isin(used_python_idx))
+        ]
+        
+        matched = False
+        for py_idx, py_row in python_candidates.iterrows():
+            py_time = py_row['starttime']
+            py_amount = float(py_row['amount'])
+            
+            time_diff = abs((py_time - java_time).total_seconds() / 60)
+            
+            if time_diff <= time_window:
+                matched_events.append({
+                    'unicode': car,
+                    'cust_id': java_row['cust_id'],
+                    'java_starttime': java_row['starttime'],
+                    'java_endtime': java_row['endtime'],
+                    'java_startfuellevel': java_row['startfuellevel'],
+                    'java_endfuellevel': java_row['endfuellevel'],
+                    'java_amount': java_amount,
+                    'python_starttime': py_row['starttime'],
+                    'python_endtime': py_row['endtime'],
+                    'python_startfuellevel': py_row['startfuellevel'],
+                    'python_endfuellevel': py_row['endfuellevel'],
+                    'python_amount': py_amount
+                })
+                used_python_idx.add(py_idx)
+                matched = True
+                break
+            
+        if not matched:
+            only_in_java.append({k: str(v) for k, v in java_row.to_dict().items()})
+            
+    for idx, row in python_results.iterrows():
+        if idx not in used_python_idx:
+            only_in_python.append({k: str(v) for k, v in row.to_dict().items()})
+            
+    return matched_events, only_in_python, only_in_java
+    
+     
+     
+    
+     
         
 def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=None, send_email=False):
     """
     比對 Python 和 Java 的加油和偷油事件偵測結果
-    
-    Parameters:
-    -----------
-    vehicles: list, 車輛清單，格式為 [{"unicode": "xxx", "cust_id": "xxx", "country": "xxx"}]
-    st: str, 格式為 "YYYY-MM-DD"，開始日期
-    et: str, 格式為 "YYYY-MM-DD"，結束日期
-    country: str, 國家代碼，如果為 None 會自動從配置檔案讀取
-    limit: int, 處理的車輛數量限制
-    send_email: bool, 是否寄出報告郵件
-    
-    Returns:
     --------
     tuple: (matched_events, only_in_python, only_in_java, python_no_data_list, java_no_data_list, python_error_vehicles, 
             matched_theft_events, only_in_python_theft, only_in_java_theft)
