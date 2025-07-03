@@ -1273,7 +1273,7 @@ def taskRemoveDup():
 
 
 if __name__ == "__main__":
-    #print(getDailyReport("my-stage2", "522", "40003070", "2025-06-5T16:00:00Z", "2025-06-06T15:59:59Z", "get"))    #rerunByUnicodes("vn", unicodes)
+    print(getDailyReport("vn-stage2", "36643", "30069558", "2025-07-01T00:00:00Z", "2025-07-01T23:59:59Z", "set"))    #rerunByUnicodes("vn", unicodes)
     #pprint(getRedis("vn", "fuel:unicode:30081123", "hash"))
     #rerunByUnicodes("my", "40011716")
                 # "startTime": "2024-12-16T16:00:00Z",

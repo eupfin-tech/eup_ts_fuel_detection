@@ -6,7 +6,7 @@ def get_all_vehicles(country: str = None):
     支援的國家: MY, VN, TW
     如果不指定國家，會自動從配置檔案讀取
     """
-    try:
+    try: 
         conn, config_country = getSqlSession("CTMS_Center")
         
         # 如果沒有指定國家，使用配置檔案中的國家
@@ -183,9 +183,3 @@ if __name__ == "__main__":
         print(f"\n{country}前3輛車:")
         for i, vehicle in enumerate(vehicles[:3]):
             print(f"  車輛 {i+1}: Unicode={vehicle['Unicode']}, Customer ID={vehicle['Cust_ID']}, IMID={vehicle['Cust_IMID']}")
-
-def readServerSetting(key: str, country: str = None, path=None):
-    # 根據國家讀取不同配置
-    if country:
-        country_key = f"{key}_{country.upper()}"
-        # 讀取國家特定配置

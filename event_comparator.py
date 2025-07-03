@@ -87,6 +87,7 @@ def test_api_connection():
             print(f"  Internet connection: FAILED - Status {response.status_code}")
     except Exception as e:
         print(f"  Internet connection: FAILED - {e}")
+<<<<<<< Updated upstream
 
 def init_information(
     vehicles: Optional[List[Dict]],
@@ -166,10 +167,73 @@ def compare_events(
     if python_results.empty or java_results.empty:
         if python_results.empty and not java_results.empty:
             only_in_java = java_results.to_dict('records')
+=======
+ 
+#初始化
+def init_information(
+    vehicles: list[dict],
+    country: str,
+    st: str,
+    et: str,
+    limit: int) -> tuple[list[dict], str, datetime, datetime]:
+    
+    #country
+    if country is None:
+        from eup_base import getSqlSession
+        conn, config_country = getSqlSession("CTMS_Center")
+        country = config_country.lower()  # 確保是小寫
+        
+    #vehicles
+    if vehicles is None:
+        vehicles_data = get_all_vehicles(country.upper()) #撈db要
+        if not vehicles_data:
+            return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+                    [], [], [], pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+        vehicles = []
+        for vehicle in vehicles_data:
+            vehicles.append({
+                "unicode": str(vehicle['Unicode']),
+                "cust_id": str(vehicle['Cust_ID']),
+                "country": country.lower()  # 確保是小寫，因為其他函數需要小寫
+            })
+    
+    #st, et
+    st = datetime.strptime(st, "%Y-%m-%d")
+    et = datetime.strptime(et, "%Y-%m-%d")
+    
+    #limit
+    if limit:
+        vehicles = vehicles[:limit]
+        
+    return vehicles, country, st, et
+        
+#將 starttime/endtime 轉成 datetime，amount 轉成 numeric   
+def standardize_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if not df.empty:
+        df['starttime'] = pd.to_datetime(df['starttime'], errors='coerce')
+        df['endtime'] = pd.to_datetime(df['endtime'], errors='coerce')
+        df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+    return df
+
+#比對兩演算法的加油和偷油事件
+def compare_events(
+    python_results: pd.DataFrame, 
+    java_results: pd.DataFrame, 
+    time_window: int = 45 ) -> tuple[list[dict], list[dict], list[dict]]:
+    
+    matched_events, only_in_python, only_in_java = [], [], []   
+    used_python_idx = set()
+    
+    if python_results.empty or java_results.empty:
+        if python_results.empty and not java_results.empty:
+            only_in_java = java_results.to_dict('records')
+            
+>>>>>>> Stashed changes
         elif not python_results.empty and java_results.empty:
             only_in_python = python_results.to_dict('records')
         return matched_events, only_in_python, only_in_java
     
+<<<<<<< Updated upstream
     # 對 Java 結果進行迭代，尋找 Python 中的匹配項
     for _, java_row in java_results.iterrows():
         car = java_row['unicode']
@@ -177,6 +241,11 @@ def compare_events(
         java_amount = float(java_row['amount'])
         
         # 篩選同一車輛且未使用的 Python 結果
+=======
+    for _, java_row in java_results.iterrows():
+        car, java_time, java_amount = java_row['unicode'], java_row['starttime'], float(java_row['amount'])
+        
+>>>>>>> Stashed changes
         python_candidates = python_results[
             (python_results['unicode'] == car) &
             (~python_results.index.isin(used_python_idx))
@@ -187,11 +256,17 @@ def compare_events(
             py_time = py_row['starttime']
             py_amount = float(py_row['amount'])
             
+<<<<<<< Updated upstream
             # 計算時間差（分鐘）
             time_diff = abs((py_time - java_time).total_seconds() / 60)
             
             if time_diff <= time_window:
                 # 創建匹配記錄
+=======
+            time_diff = abs((py_time - java_time).total_seconds() / 60)
+            
+            if time_diff <= time_window:
+>>>>>>> Stashed changes
                 matched_events.append({
                     'unicode': car,
                     'cust_id': java_row['cust_id'],
@@ -212,13 +287,18 @@ def compare_events(
             
         if not matched:
             only_in_java.append({k: str(v) for k, v in java_row.to_dict().items()})
+<<<<<<< Updated upstream
     
     # 找出只在 Python 中出現的事件
+=======
+            
+>>>>>>> Stashed changes
     for idx, row in python_results.iterrows():
         if idx not in used_python_idx:
             only_in_python.append({k: str(v) for k, v in row.to_dict().items()})
             
     return matched_events, only_in_python, only_in_java
+<<<<<<< Updated upstream
 
 def get_retry_vehicles(
     vehicles: List[Dict],
@@ -287,11 +367,17 @@ def filter_existing_events(
 
 def run_again(
     vehicles: List[Dict],
+=======
+    
+def run_again(
+    vehicles: list[dict],
+>>>>>>> Stashed changes
     country: str,
     st: datetime,
     et: datetime,
     only_in_python_df: pd.DataFrame,
     only_in_java_df: pd.DataFrame,
+<<<<<<< Updated upstream
     java_no_data_unicodes: List[str],
     python_error_vehicles: List[str],
     limit: Optional[int] = None
@@ -316,6 +402,34 @@ def run_again(
     # 重新偵測
     print(f"\n補跑 Python 偵測... (車輛數量: {len(retry_vehicles)})")
     python_refuel_results, python_theft_results, python_no_data_list2, python_error_vehicles2 = detect_fuel_events_for_range(
+=======
+    java_no_data_unicodes: list[str],
+    python_error_vehicles: list[str],
+    limit: int 
+):
+    # 1. 整理需要補跑的車輛 unicode
+    retry_unicodes = set()
+    if not only_in_python_df.empty:
+        retry_unicodes.update(only_in_python_df['unicode'].astype(str).unique())
+    if not only_in_java_df.empty:
+        retry_unicodes.update(only_in_java_df['unicode'].astype(str).unique())
+    retry_unicodes.update([str(u) for u in java_no_data_unicodes])
+    retry_unicodes.update([str(u) for u in python_error_vehicles])
+    retry_unicodes = list(retry_unicodes)
+    if not retry_unicodes:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), [], [], []
+    
+    # 2. 從車輛清單中篩選需要補跑的車輛
+    retry_vehicles = []
+    for vehicle in vehicles:
+        if str(vehicle['unicode']) in retry_unicodes:
+            retry_vehicles.append(vehicle)
+    if limit:
+        retry_vehicles = retry_vehicles[:limit]
+        
+    # 3. 重新偵測
+    python_refuel_results, python_theft_results, python_no_data_list, python_error_vehicles = detect_fuel_events_for_range(
+>>>>>>> Stashed changes
         vehicles=retry_vehicles,
         country=country,
         st=st,
@@ -323,8 +437,12 @@ def run_again(
         limit=limit
     )
     
+<<<<<<< Updated upstream
     print(f"\n補跑 Java 偵測... (車輛數量: {len(retry_vehicles)})")
     java_refuel_results, java_theft_results2, java_no_data_list2 = process_daily_fuel_events(
+=======
+    java_refuel_results, java_theft_results, java_no_data_list = process_daily_fuel_events(
+>>>>>>> Stashed changes
         vehicles=retry_vehicles,
         country=country,
         st=st,
@@ -332,6 +450,7 @@ def run_again(
         limit=limit
     )
     
+<<<<<<< Updated upstream
     # 標準化數據格式
     python_refuel_results = standardize_datetime_columns(python_refuel_results)
     java_refuel_results = standardize_datetime_columns(java_refuel_results)
@@ -368,10 +487,31 @@ def run_again(
     java_no_data_list2 = list(set(java_no_data_list2) | set(java_no_data_calculated))
     
     # 處理錯誤車輛列表
+=======
+    # 4. 使用外部的 compare_events 函數進行比對
+    matched_events, only_in_python, only_in_java = compare_events(python_refuel_results, java_refuel_results)
+
+    # 5. 從原本的 only_in_java 和 only_in_python 中移除已配對的事件
+    matched_df2 = pd.DataFrame(matched_events)
+    only_in_python_df2 = pd.DataFrame(only_in_python)
+    only_in_java_df2 = pd.DataFrame(only_in_java)
+
+    # 6. 匯出還是沒資料的車輛
+    # 合併從函數呼叫得到的結果和重新計算的結果
+    python_no_data_calculated = list(set(retry_unicodes) - set(python_refuel_results['unicode'].astype(str).unique()) if not python_refuel_results.empty else set(retry_unicodes))
+    java_no_data_calculated = list(set(retry_unicodes) - set(java_refuel_results['unicode'].astype(str).unique()) if not java_refuel_results.empty else set(retry_unicodes))
+    
+    # 合併兩個來源的結果
+    python_no_data_list2 = list(set(python_no_data_list2) | set(python_no_data_calculated))
+    java_no_data_list2 = list(set(java_no_data_list2) | set(java_no_data_calculated))
+    
+    # 確保 python_error_vehicles2 是正確的格式
+>>>>>>> Stashed changes
     if isinstance(python_error_vehicles2, (list, tuple)):
         python_error_vehicles2 = [str(v) for v in python_error_vehicles2]
     else:
         python_error_vehicles2 = []
+<<<<<<< Updated upstream
     
     # 輸出補跑結果
     print(f"\n=== 補跑結果 ===")
@@ -447,15 +587,42 @@ def compare_fuel_events(
                 only_in_python_theft_df, only_in_java_theft_df)
     """
     # 初始化
+=======
+
+
+    return matched_df2, only_in_python_df2, only_in_java_df2, python_no_data_list2, java_no_data_list2, python_error_vehicles2
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=None, send_email=False):
+    """
+    比對 Python 和 Java 的加油和偷油事件偵測結果
+    --------
+    tuple: (matched_events, only_in_python, only_in_java, python_no_data_list, java_no_data_list, python_error_vehicles, 
+            matched_theft_events, only_in_python_theft, only_in_java_theft)
+    """
+    # 使用 init_information 函數進行初始化
+>>>>>>> Stashed changes
     vehicles, country, st, et = init_information(vehicles, country, st, et, limit)
     
     # 檢查初始化結果
     if not vehicles:
         print("警告: 初始化失敗，沒有可用的車輛資料")
+<<<<<<< Updated upstream
         return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), [], [], [],
                 pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
     
     print(f"\n開始處理 {country.upper()} 的車輛資料 (共 {len(vehicles)} 輛)")
+=======
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), [], [], [], pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+>>>>>>> Stashed changes
     
     # 1. 取得 Python 和 Java 偵測結果
     print("\n取得 Python 偵測結果...")
@@ -487,7 +654,13 @@ def compare_fuel_events(
     python_theft_results = standardize_datetime_columns(python_theft_results)
     java_theft_results = standardize_datetime_columns(java_theft_results)
     
+<<<<<<< Updated upstream
     # 3. 執行比對
+=======
+    # 3. 使用外部的 compare_events 函數進行比對
+    
+    # 4. 執行比對
+>>>>>>> Stashed changes
     print(f"\n{'='*50}")
     print(f"開始比對 {country.upper()} 的加油和偷油事件")
     print(f"{'='*50}")
@@ -562,6 +735,7 @@ def compare_fuel_events(
     
     # 10. 寄信（同時包含加油與偷油事件結果）
     if send_email:
+<<<<<<< Updated upstream
         try:
             send_report_email(
                 st=st,
@@ -581,6 +755,172 @@ def compare_fuel_events(
     return (matched_all, only_python_all, only_java_all, python_no_data_all, 
             java_no_data_all, python_error_vehicles, matched_theft_df, 
             only_in_python_theft_df, only_in_java_theft_df)
+=======
+        send_report_email(
+            st=st,
+            et=et,
+            matched_all_df=matched_all,
+            only_python_all_df=only_python_all,
+            only_java_all_df=only_java_all,
+            country=country,
+            matched_theft_df=matched_theft_df,
+            only_python_theft_df=only_in_python_theft_df,
+            only_java_theft_df=only_in_java_theft_df
+        )
+
+    return matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df
+
+
+
+def run_again(
+    vehicles, country, st, et,
+    only_in_python_df, only_in_java_df, java_no_data_unicodes,
+    python_error_vehicles,
+    limit=None
+):
+    """
+    針對未配對事件與 Java 無資料車輛重新偵測並比對（不延長查詢區間）
+
+    Parameters:
+    -----------
+    vehicles: list, 車輛清單
+    country: str，國家代碼
+    st, et: datetime，查詢事件的日期範圍
+    only_in_python_df: DataFrame，只在 Python 中出現的事件
+    only_in_java_df: DataFrame，只在 Java 中出現的事件
+    java_no_data_unicodes: list，Java 無資料的車輛清單
+    python_error_vehicles: list，Python 處理時發生錯誤的車輛清單
+    limit: int，處理的車輛數量限制
+    """
+
+    # 1. 整理需要補跑的車輛 unicode
+    retry_unicodes = set()
+    if not only_in_python_df.empty:
+        retry_unicodes.update(only_in_python_df['unicode'].astype(str).unique())
+    if not only_in_java_df.empty:
+        retry_unicodes.update(only_in_java_df['unicode'].astype(str).unique())
+    retry_unicodes.update([str(u) for u in java_no_data_unicodes])
+    retry_unicodes.update([str(u) for u in python_error_vehicles])
+    retry_unicodes = list(retry_unicodes)
+    if not retry_unicodes:
+        print("無需補跑的車輛")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), [], [], []
+
+    # 2. 從車輛清單中篩選需要補跑的車輛
+    retry_vehicles = []
+    for vehicle in vehicles:
+        if str(vehicle['unicode']) in retry_unicodes:
+            retry_vehicles.append(vehicle)
+    if limit:
+        retry_vehicles = retry_vehicles[:limit]
+
+    # 3. 重新偵測
+    print("\n補跑 Python 偵測...")
+    python_refuel_results, python_theft_results, python_no_data_list2, python_error_vehicles2 = detect_fuel_events_for_range(
+        vehicles=retry_vehicles,
+        country=country,
+        st=st,
+        et=et,
+        limit=limit
+    )
+    print("\n補跑 Java 偵測...")
+    java_refuel_results, java_theft_results2, java_no_data_list2 = process_daily_fuel_events(
+        vehicles=retry_vehicles,
+        country=country,
+        st=st,
+        et=et,
+        limit=limit
+    )
+
+    # 型別轉換，確保比對時不會出錯
+    python_refuel_results = standardize_datetime_columns(python_refuel_results)
+    java_refuel_results = standardize_datetime_columns(java_refuel_results)
+    
+    # 過濾掉原本已經存在的事件
+    if not python_refuel_results.empty and not only_in_python_df.empty:
+        # 直接轉換型別後進行 merge
+        python_refuel_results = python_refuel_results.merge(
+            only_in_python_df[['unicode', 'starttime', 'amount']].assign(
+                starttime=pd.to_datetime(only_in_python_df['starttime'], errors='coerce'),
+                amount=pd.to_numeric(only_in_python_df['amount'], errors='coerce')
+            ), 
+            on=['unicode', 'starttime', 'amount'], 
+            how='left', 
+            indicator=True
+        )
+        python_refuel_results = python_refuel_results[python_refuel_results['_merge'] == 'left_only'].drop('_merge', axis=1)
+        
+    if not java_refuel_results.empty and not only_in_java_df.empty:
+        # 直接轉換型別後進行 merge
+        java_refuel_results = java_refuel_results.merge(
+            only_in_java_df[['unicode', 'starttime', 'amount']].assign(
+                starttime=pd.to_datetime(only_in_java_df['starttime'], errors='coerce'),
+                amount=pd.to_numeric(only_in_java_df['amount'], errors='coerce')
+            ), 
+            on=['unicode', 'starttime', 'amount'], 
+            how='left', 
+            indicator=True
+        )
+        java_refuel_results = java_refuel_results[java_refuel_results['_merge'] == 'left_only'].drop('_merge', axis=1)
+
+    # 4. 使用外部的 compare_events 函數進行比對
+    matched_events, only_in_python, only_in_java = compare_events(python_refuel_results, java_refuel_results)
+
+    # 5. 從原本的 only_in_java 和 only_in_python 中移除已配對的事件
+    matched_df2 = pd.DataFrame(matched_events)
+    only_in_python_df2 = pd.DataFrame(only_in_python)
+    only_in_java_df2 = pd.DataFrame(only_in_java)
+    
+    # 如果有新配對的事件，從原本的遺漏清單中移除
+    if not matched_df2.empty:
+        # 建立已配對事件的識別鍵（unicode + starttime + amount）
+        matched_keys = set()
+        for _, row in matched_df2.iterrows():
+            key = f"{row['unicode']}_{row['java_starttime']}_{row['java_amount']}"
+            matched_keys.add(key)
+        
+        # 從原本的 only_in_java_df 中移除已配對的事件
+        if not only_in_java_df.empty:
+            only_in_java_df_filtered = []
+            for _, row in only_in_java_df.iterrows():
+                key = f"{row['unicode']}_{row['starttime']}_{row['amount']}"
+                if key not in matched_keys:
+                    only_in_java_df_filtered.append(row.to_dict())
+            only_in_java_df = pd.DataFrame(only_in_java_df_filtered)
+        
+        # 從原本的 only_in_python_df 中移除已配對的事件
+        if not only_in_python_df.empty:
+            only_in_python_df_filtered = []
+            for _, row in only_in_python_df.iterrows():
+                key = f"{row['unicode']}_{row['starttime']}_{row['amount']}"
+                if key not in matched_keys:
+                    only_in_python_df_filtered.append(row.to_dict())
+            only_in_python_df = pd.DataFrame(only_in_python_df_filtered)
+
+    # 6. 匯出還是沒資料的車輛
+    # 合併從函數呼叫得到的結果和重新計算的結果
+    python_no_data_calculated = list(set(retry_unicodes) - set(python_refuel_results['unicode'].astype(str).unique()) if not python_refuel_results.empty else set(retry_unicodes))
+    java_no_data_calculated = list(set(retry_unicodes) - set(java_refuel_results['unicode'].astype(str).unique()) if not java_refuel_results.empty else set(retry_unicodes))
+    
+    # 合併兩個來源的結果
+    python_no_data_list2 = list(set(python_no_data_list2) | set(python_no_data_calculated))
+    java_no_data_list2 = list(set(java_no_data_list2) | set(java_no_data_calculated))
+    
+    # 確保 python_error_vehicles2 是正確的格式
+    if isinstance(python_error_vehicles2, (list, tuple)):
+        python_error_vehicles2 = [str(v) for v in python_error_vehicles2]
+    else:
+        python_error_vehicles2 = []
+
+    print("\n=== 補跑結果 ===")
+    print(f"新配對: {len(matched_df2)} 筆")
+    print(f"補跑後 Python 還是沒資料: {python_no_data_list2}")
+    print(f"補跑後 Java 還是沒資料: {java_no_data_list2}")
+    print(f"補跑後 Python 處理時發生錯誤: {python_error_vehicles2}")
+
+    return matched_df2, only_in_python_df2, only_in_java_df2, python_no_data_list2, java_no_data_list2, python_error_vehicles2
+
+>>>>>>> Stashed changes
 
 # 使用範例
 if __name__ == "__main__":
@@ -593,7 +933,13 @@ if __name__ == "__main__":
     test_database_connection()
     test_api_connection()
     
+<<<<<<< Updated upstream
     # 設定日期範圍
+=======
+    #st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    #et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
+    
+>>>>>>> Stashed changes
     st = "2025-06-01"
     et = "2025-06-30"
     
@@ -612,7 +958,11 @@ if __name__ == "__main__":
             country="my",   # 設為 None 會自動從配置檔案讀取國家
             st=st,
             et=et,
+<<<<<<< Updated upstream
             limit=DEFAULT_LIMIT,
+=======
+            limit= 100,
+>>>>>>> Stashed changes
             send_email=True,
         )
         
