@@ -2,88 +2,12 @@ import os
 import pandas as pd
 import sys
 from datetime import datetime, timedelta
-from fuel_detection_withtheft import detect_fuel_events_for_range
-from getdaily_refuel import process_daily_fuel_events
-from db_get import get_all_vehicles
-from send_email import send_report_email
+from event_compare.fuel_detection_withtheft import detect_fuel_events_for_range
+from event_compare.getdaily_refuel import process_daily_fuel_events
+from tool.db_get import get_all_vehicles
+from tool.send_email import send_report_email
 from observability import init_observability
-
-def debug_environment():
-    """除錯環境資訊"""
-    print("=" * 50)
-    print("DEBUG: Environment Information")
-    print("=" * 50)
-    print(f"Python version: {sys.version}")
-    print(f"Current working directory: {os.getcwd()}")
-    print(f"Script directory: {os.path.dirname(os.path.realpath(__file__))}")
-    print(f"Environment variables:")
-    for key, value in os.environ.items():
-        if 'COUNTRY' in key or 'PATH' in key:
-            print(f"  {key}: {value}")
-    
-    print("\nFiles in current directory:")
-    try:
-        files = os.listdir('.')
-        for f in files:
-            if f.endswith('.csv') or f.endswith('.py'):
-                print(f"  {f}")
-    except Exception as e:
-        print(f"  Error listing files: {e}")
-    
-    print("=" * 50)
-
-def check_csv_files():
-    """檢查 CSV 檔案是否存在"""
-    print("DEBUG: Checking CSV files...")
-    
-    csv_files = {
-        "my": "MY_ALL_Unicode.csv",
-        "vn": "VN_ALL_Unicode.csv"
-    }
-    
-    for country, filename in csv_files.items():
-        if os.path.exists(filename):
-            try:
-                df = pd.read_csv(filename)
-                print(f"  {filename}: EXISTS ({len(df)} rows)")
-            except Exception as e:
-                print(f"  {filename}: EXISTS but ERROR reading: {e}")
-        else:
-            print(f"  {filename}: NOT FOUND")
-
-def test_database_connection():
-    """測試資料庫連線"""
-    print("DEBUG: Testing database connection...")
-    try:
-        from eup_base import getSqlSession
-        conn, config_country = getSqlSession("CTMS_Center")
-        # 測試連線是否有效
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        result = cursor.fetchone()
-        cursor.close()
-        print("  Database connection: SUCCESS")
-        print(f"  Config country: {config_country}")
-        # 不要關閉連線，因為 getSqlSession 使用了 @cache 裝飾器
-        # conn.close()  # 移除這行
-    except Exception as e:
-        print(f"  Database connection: FAILED - {e}")
-        import traceback
-        traceback.print_exc()
-
-def test_api_connection():
-    """測試 API 連線"""
-    print("DEBUG: Testing API connection...")
-    try:
-        import requests
-        # 測試一個簡單的 API 呼叫
-        response = requests.get("https://httpbin.org/get", timeout=10)
-        if response.status_code == 200:
-            print("  Internet connection: SUCCESS")
-        else:
-            print(f"  Internet connection: FAILED - Status {response.status_code}")
-    except Exception as e:
-        print(f"  Internet connection: FAILED - {e}")
+from tool.eup_base import getSqlSession
         
 def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=None, send_email=False):
     """
@@ -105,7 +29,7 @@ def compare_fuel_events(vehicles=None, country=None, st=None, et=None, limit=Non
     """
     # 如果沒有指定國家，自動從配置檔案讀取
     if country is None:
-        from eup_base import getSqlSession
+        from tool.eup_base import getSqlSession
         conn, config_country = getSqlSession("CTMS_Center")
         country = config_country.lower()  # 確保是小寫
         print(f"自動檢測到國家: {country.upper()}")
@@ -573,67 +497,18 @@ def run_again(
 
     return matched_df2, only_in_python_df2, only_in_java_df2, python_no_data_list2, java_no_data_list2, python_error_vehicles2
 
-
-# 使用範例
 if __name__ == "__main__":
-    from observability import init_observability
     init_observability()
-    debug_environment()
-    check_csv_files()
-    test_database_connection()
-    test_api_connection()
-  
-    
     st = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d")  # 今天的日期
-    
-    print(f"\n{'='*50}")
-    print(f"開始自動處理 (國家設定來自 ServerSetting.yml)")
-    print(f"{'='*50}")
-    
+    et = (datetime.today()-timedelta(days=0)).strftime("%Y-%m-%d") 
     try:
-        print(f"從資料庫獲取車輛清單...")
-        # 直接從資料庫獲取車輛清單，同時比對加油和偷油事件
-        # country 參數設為 None，讓 db_get.py 自動從配置檔案讀取
-        matched_all, only_python_all, only_java_all, python_no_data_all, java_no_data_all, python_error_vehicles, matched_theft_df, only_in_python_theft_df, only_in_java_theft_df = compare_fuel_events(
-            vehicles=None,  # 設為 None 會自動從資料庫獲取
-            country= None,   # 設為 None 會自動從配置檔案讀取國家
-            st=st,
-            et=et,
-            limit= None,
-            send_email=True,
-        )
-        
-        # 從連接物件取得國家資訊來顯示
-        from eup_base import getSqlSession
-        conn, config_country = getSqlSession("CTMS_Center")
-        country_display = config_country.upper()
-        
-        print(f"\n{country_display} 處理完成")
-        print(f"加油事件成功配對: {len(matched_all)} 筆")
-        print(f"加油事件 Python 遺漏: {len(only_java_all)} 筆")
-        print(f"加油事件 Java 遺漏: {len(only_python_all)} 筆")
-        print(f"偷油事件成功配對: {len(matched_theft_df)} 筆")
-        print(f"偷油事件 Python 遺漏: {len(only_in_java_theft_df)} 筆")
-        print(f"偷油事件 Java 遺漏: {len(only_in_python_theft_df)} 筆")
+        # 每日事件比較排程
+        compare_fuel_events(vehicles=None, country= None, st=st, et=et, limit= None, send_email=True)
+
+        # TODO: 每週比較排程
+
+        # TODO: 每天功能選項檢查
         
     except Exception as e:
         print(f"處理時發生錯誤: {str(e)}")
-    
-    print(f"\n{'='*50}")
-    print("所有處理已完成")
-    print(f"{'='*50}")
-    
-    # 比對指定日期範圍的加油和偷油事件
-    # 加油事件結果：
-    #matched_all 補跑後matched的結果
-    #only_python_all 補跑後only_python的結果
-    #only_java_all 補跑後only_java的結果
-    #python_no_data_all 補跑後python往前推到最久還是沒資料
-    #java_no_data_all 補跑後的 Java 還是沒抓到加油事件資料
-    #python_error_vehicles 補跑後的 Python 處理時還是發生錯誤的車輛
-    
-    # 偷油事件結果：
-    #matched_theft_df 偷油事件配對結果
-    #only_in_python_theft_df 只在 Python 中出現的偷油事件
-    #only_in_java_theft_df 只在 Java 中出現的偷油事件
+  

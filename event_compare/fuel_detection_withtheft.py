@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime, timedelta, timezone
 from scipy.interpolate import interp1d
 from scipy import stats
-from crm_model import fetch_fuel_calibration
+from tool.crm_model import fetch_fuel_calibration
 import requests 
 
 class FuelEventDetector:

@@ -1,4 +1,4 @@
-from fuel_setting import getDailyReport
+from tool.fuel_setting import getDailyReport
 import pandas as pd 
 import json
 from datetime import timedelta, datetime

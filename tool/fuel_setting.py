@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import requests
 from cassandra.query import BatchStatement
-from eup_token import (
+from .eup_token import (
     getCassandraSession,
     getFmsToken,
     getManyRedis,

@@ -21,4 +21,4 @@ RUN python -m pip install --no-cache-dir -r requirements.txt \
 WORKDIR /app
 COPY . .
 
-CMD ["opentelemetry-instrument", "python", "event_comparator.py"]
+CMD ["opentelemetry-instrument", "python", "main.py"]

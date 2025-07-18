@@ -1,4 +1,4 @@
-from eup_base import getSqlSession
+from .eup_base import getSqlSession
 
 def get_all_vehicles(country: str = None):
     """
