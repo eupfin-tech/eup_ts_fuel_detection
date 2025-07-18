@@ -71,7 +71,7 @@ def analyze_fuel_events_for_vehicle(country, cust_id, unicode, start_time, end_t
                     # 1. 偷油量 > 7
                     # 2. 結束油量 < 開始油量
                     # 3. 偷油時間在 start_time 和 end_time 之間
-                    elif event_type == 3:  # 偷油事件
+                    elif event_type == 1:  # 偷油事件
                         if (amount > 7 and 
                             end_fuel < start_fuel and 
                             event_start_time >= start_time and 
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     # 設定參數
     start_time = "2025-06-01 16:00:00"
     end_time = "2025-06-30 15:59:59"
-    limit_vehicles = 50  # 限制分析的車輛數量，設為 None 表示不限制
+    limit_vehicles = 200  # 限制分析的車輛數量，設為 None 表示不限制
     
     # 方式1: 從 CSV 檔案讀取車輛清單
     csv_file = "C:\work\MY\MY_ALL_Unicode.csv" # 請替換為您的 CSV 檔案路徑
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     if not vehicle_list:
         print("使用預設車輛清單")
         vehicle_list = [
-            ("280", "40010330"),
+            ("1320", "40009131"),
             # 可以添加更多車輛
         ]
     
