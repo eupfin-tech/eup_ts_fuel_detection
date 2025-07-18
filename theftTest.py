@@ -130,13 +130,13 @@ def save_results_to_csv(refuel_df, theft_df, country, start_time, end_time):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     if not refuel_df.empty:
-        refuel_filename = f"refuel_events_{country}_{timestamp}.csv"
+        refuel_filename = f"refuel_events_{country}.csv"
         refuel_df.to_csv(refuel_filename, index=False, encoding='utf-8-sig')
         print(f"加油事件已儲存至: {refuel_filename}")
         print(f"加油事件統計: {len(refuel_df)} 筆記錄")
     
     if not theft_df.empty:
-        theft_filename = f"theft_events_{country}_{timestamp}.csv"
+        theft_filename = f"theft_events_{country}.csv"
         theft_df.to_csv(theft_filename, index=False, encoding='utf-8-sig')
         print(f"偷油事件已儲存至: {theft_filename}")
         print(f"偷油事件統計: {len(theft_df)} 筆記錄")
@@ -151,7 +151,7 @@ def save_results_to_csv(refuel_df, theft_df, country, start_time, end_time):
     }
     
     summary_df = pd.DataFrame(summary_data)
-    summary_filename = f"fuel_events_summary_{country}_{timestamp}.csv"
+    summary_filename = f"fuel_events_summary_{country}.csv"
     summary_df.to_csv(summary_filename, index=False, encoding='utf-8-sig')
     print(f"摘要統計已儲存至: {summary_filename}")
 
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     # 設定參數
     start_time = "2025-06-01 16:00:00"
     end_time = "2025-06-30 15:59:59"
-    limit_vehicles = 200  # 限制分析的車輛數量，設為 None 表示不限制
+    limit_vehicles = 50  # 限制分析的車輛數量，設為 None 表示不限制
     
     # 方式1: 從 CSV 檔案讀取車輛清單
     csv_file = "C:\work\MY\MY_ALL_Unicode.csv" # 請替換為您的 CSV 檔案路徑
